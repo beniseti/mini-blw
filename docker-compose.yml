@@ -5,16 +5,18 @@ services:
     container_name: bocaditos-blw
     ports:
       - "${PORT:-8080}:8080"
+    # Configuración: crea un archivo .env (copia de .env.example). Sin .env se usan
+    # los valores por defecto de abajo, pensados para probar en tu PC.
     environment:
       # Datos de ejemplo: se insertan SOLO al crear la base de datos por primera vez.
-      #   - Para probar en tu PC: "true"
-      #   - En el NAS (uso real):  "false"
-      SEED_DEMO_DATA: "true"
-      TZ: Europe/Madrid
+      # En el NAS pon SEED_DEMO_DATA=false en el .env.
+      SEED_DEMO_DATA: "${SEED_DEMO_DATA:-true}"
+      TZ: "${TZ:-Europe/Madrid}"
     volumes:
-      # La base de datos SQLite (bocaditos.db) se guarda aquí y sobrevive a
-      # reinicios y actualizaciones del contenedor.
-      - bocaditos_data:/data
+      # La base de datos SQLite (bocaditos.db) sobrevive a reinicios y actualizaciones.
+      # Por defecto, en un volumen de Docker; con DATA_PATH=./data en el .env, en la
+      # carpeta ./data (más fácil de incluir en las copias de seguridad del NAS).
+      - ${DATA_PATH:-bocaditos_data}:/data
     restart: unless-stopped
     read_only: true
     tmpfs:

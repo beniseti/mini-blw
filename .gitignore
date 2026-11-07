@@ -26,3 +26,6 @@ dist-ssr
 # Servidor compilado y base de datos local de desarrollo
 /dist-server
 /data
+
+# Configuración local de Docker (ver .env.example)
+.env

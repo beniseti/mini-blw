@@ -63,7 +63,7 @@ El orden de los primeros alimentos se puede cambiar en **`src/data/plan.ts`**.
 
 ### Opción A: con Docker (igual que en el NAS)
 
-Necesitas **Docker Desktop** abierto.
+Necesitas **Docker Desktop** abierto. Sin archivo `.env`, se usan los valores para probar: datos de ejemplo y base de datos en un volumen de Docker.
 
 ```bash
 git clone https://github.com/beniseti/mini-blw.git
@@ -81,7 +81,7 @@ Abre **http://localhost:8080**. La primera vez que arranca, el servidor **crea l
 docker compose logs bocaditos
 ```
 ```
-🆕 Base de datos creada en /data/bocaditos.db (esquema v1)
+🆕 Base de datos creada en /data/bocaditos.db (esquema v2)
 🧪 Rellenada con datos de ejemplo (SEED_DEMO_DATA=true)
 🥑 Bocaditos BLW escuchando en http://localhost:8080
 ```
@@ -141,27 +141,81 @@ npm run start:demo
 
 ## Desplegar en el NAS (Docker)
 
-> 🔒 **La app no tiene contraseña**: cualquiera que llegue a la URL puede ver y modificar los datos. Úsala **solo dentro de tu red de casa o a través de una VPN** (Tailscale, WireGuard, la VPN del NAS…). **No abras el puerto 8080 a Internet** ni la publiques con un proxy inverso abierto al exterior.
+> 🔒 **La app no tiene contraseña**: cualquiera que llegue a la URL puede ver y modificar los datos. Úsala **solo dentro de tu red de casa o a través de una VPN** (Tailscale, WireGuard, la VPN del NAS…). **No abras el puerto a Internet** ni la publiques con un proxy inverso abierto al exterior.
 
-1. **Copia el proyecto al NAS**, por ejemplo en `/volume1/docker/bocaditos`. Puedes usar `git clone` por SSH, o descargar el ZIP desde GitHub y subirlo con File Station.
-2. **Desactiva los datos de ejemplo**: en `docker-compose.yml` cambia `SEED_DEMO_DATA: "true"` por **`"false"`**. Solo afecta a cuando se crea la base de datos; si se te olvida, puedes vaciarla desde la app con *Perfil → Borrar todo*.
-3. **Arráncalo**:
-   - **Synology (Container Manager):** *Proyecto → Crear*, elige la carpeta del paso 1 y la app detecta el `docker-compose.yml`. Pulsa *Siguiente → Hecho*. La primera vez compila la imagen (unos minutos).
-   - **QNAP, Unraid, TrueNAS u otro con SSH:** entra por SSH en la carpeta y ejecuta:
+Estos pasos sirven para cualquier NAS con Docker y acceso SSH (UGREEN, Synology, QNAP…). Los ejemplos usan la carpeta compartida `docker` del volumen 1 (`/volume1/docker`); cámbiala por la tuya.
+
+**1. Activa SSH en el NAS y conéctate** desde la terminal de tu PC (en UGREEN: *Panel de control → Terminal → SSH*):
 
 ```bash
-docker compose up -d --build
+ssh tu-usuario@IP-del-NAS
 ```
 
-4. Abre **http://IP-del-NAS:8080** (por ejemplo `http://192.168.1.20:8080`). Si el 8080 está ocupado, cambia `"${PORT:-8080}:8080"` por, por ejemplo, `"8095:8080"`.
-
-**Actualizar** a una versión nueva del código. Los datos están en el volumen y se conservan:
+**2. Descarga el proyecto desde GitHub:**
 
 ```bash
-git pull
+cd /volume1/docker
 ```
 ```bash
-docker compose up -d --build
+sudo git clone https://github.com/beniseti/mini-blw.git bocaditos
+```
+
+Si el NAS dice `git: command not found`, usa Git desde Docker (hace lo mismo):
+
+```bash
+sudo docker run --rm -v /volume1/docker:/git -w /git alpine/git clone https://github.com/beniseti/mini-blw.git bocaditos
+```
+
+**3. Crea la configuración y la carpeta de la base de datos:**
+
+```bash
+cd bocaditos
+```
+```bash
+sudo cp .env.example .env
+```
+```bash
+sudo mkdir -p data && sudo chown -R 1000:1000 data
+```
+
+El `.env` ya viene listo para uso real: base de datos **vacía** (`SEED_DEMO_DATA=false`), guardada en la carpeta `data`, y puerto **8080**. Para usar otro puerto, por ejemplo el 8095:
+
+```bash
+sudo sed -i 's/^PORT=.*/PORT=8095/' .env
+```
+
+**4. Compila y arranca.** La primera vez tarda unos minutos:
+
+```bash
+sudo docker compose up -d --build
+```
+
+Si tu NAS solo tiene la versión antigua del comando, usa `sudo docker-compose up -d --build`.
+
+**5. Comprueba que está en marcha:**
+
+```bash
+sudo docker compose logs bocaditos
+```
+
+Debe mostrar `🆕 Base de datos creada en /data/bocaditos.db` y `🥑 Bocaditos BLW escuchando…`. Abre **http://IP-del-NAS:8080** en el navegador. El contenedor también aparece en la app Docker del NAS, desde donde puedes pararlo o ver sus registros.
+
+**Actualizar a una versión nueva.** El `.env` y la carpeta `data` no se tocan:
+
+```bash
+cd /volume1/docker/bocaditos
+```
+```bash
+sudo git pull
+```
+```bash
+sudo docker compose up -d --build
+```
+
+Sin `git` en el NAS, el `pull` se hace así:
+
+```bash
+sudo docker run --rm -v /volume1/docker/bocaditos:/git -w /git alpine/git pull
 ```
 
 ### HTTPS: para instalarla en el móvil y usarla sin conexión
@@ -176,19 +230,22 @@ Por `http://IP-del-NAS:8080` la app funciona y sincroniza, pero los navegadores 
 DOMAIN=bocaditos.midominio.com docker compose --profile https up -d --build
 ```
 
-### Variables de entorno
+### Configuración (`.env`)
 
-| Variable         | Por defecto (Docker) | Descripción                                                              |
-| ---------------- | -------------------- | ------------------------------------------------------------------------ |
-| `SEED_DEMO_DATA` | `true` en el compose | Rellena con datos de ejemplo **solo al crear** la base de datos           |
-| `PORT`           | `8080`               | Puerto interno del servidor                                              |
-| `DATA_DIR`       | `/data`              | Carpeta de la base de datos                                              |
-| `DB_FILE`        | `bocaditos.db`       | Nombre del archivo SQLite                                                |
-| `TZ`             | `Europe/Madrid`      | Zona horaria (para las fechas de los datos de ejemplo y los logs)        |
+Se configura con un archivo `.env` junto a `docker-compose.yml` (copia de `.env.example`). No se sube a Git, así que `git pull` nunca lo pisa. Sin `.env` se usan los valores para probar en el PC.
+
+| Variable         | En `.env.example` | Sin `.env`        | Descripción                                                         |
+| ---------------- | ----------------- | ----------------- | ------------------------------------------------------------------- |
+| `PORT`           | `8080`            | `8080`            | Puerto en el que se abre la app                                     |
+| `SEED_DEMO_DATA` | `false`           | `true`            | Datos de ejemplo **solo al crear** la base de datos                 |
+| `DATA_PATH`      | `./data`          | `bocaditos_data`  | Dónde se guarda la base de datos: carpeta del NAS o volumen Docker  |
+| `TZ`             | `Europe/Madrid`   | `Europe/Madrid`   | Zona horaria                                                        |
+
+Si cambias `.env`, aplica los cambios con `docker compose up -d`.
 
 ## La base de datos
 
-- Es un único archivo, **`bocaditos.db`**, dentro del volumen Docker `bocaditos_data` (montado en `/data`). Sobrevive a reinicios y actualizaciones del contenedor.
+- Es un único archivo, **`bocaditos.db`**. En el NAS, con el `.env` de ejemplo, está en la carpeta `data` del proyecto (por ejemplo `/volume1/docker/bocaditos/data/bocaditos.db`). Sin `.env`, está en el volumen Docker `bocaditos_data`. Sobrevive a reinicios y actualizaciones del contenedor.
 - **Se crea sola** la primera vez que arranca el servidor. Las tablas se crean y actualizan con migraciones versionadas (`server/db.ts`), así que futuras versiones pueden cambiar el esquema sin perder datos.
 - Tablas: `profile` (el bebé), `trials` (las pruebas), `plan_items` (el plan de comidas), `deleted_trials` (borrados, para la sincronización), `applied_ops` (cambios ya recibidos) y `meta`.
 - Al actualizar a una versión con cambios en el esquema (por ejemplo, la que añadió el plan de comidas), la base de datos existente **se migra sola** al arrancar, sin perder datos.
@@ -197,23 +254,19 @@ DOMAIN=bocaditos.midominio.com docker compose --profile https up -d --build
 ### Copias de seguridad
 
 - **Desde la app:** *Perfil → Exportar datos (JSON)*. Para restaurar, *Importar copia*.
-- **El archivo de la base de datos**, con el contenedor parado para que la copia sea coherente:
+- **El archivo de la base de datos.** Con `DATA_PATH=./data`, que es lo recomendado en el NAS, basta con incluir la carpeta `data` en las copias de seguridad del NAS. Para una copia manual coherente, para antes el contenedor:
 
 ```bash
-docker compose stop
+sudo docker compose stop
 ```
 ```bash
-docker compose cp bocaditos:/data/bocaditos.db ./bocaditos-copia.db
+sudo cp data/bocaditos.db bocaditos-copia.db
 ```
 ```bash
-docker compose start
+sudo docker compose start
 ```
 
-- **Para que Hyper Backup (u otra herramienta del NAS) copie la base de datos**, guárdala en una carpeta del NAS en lugar del volumen. En `docker-compose.yml` cambia `- bocaditos_data:/data` por `- ./data:/data`, y antes de arrancar da permisos al usuario del contenedor (UID 1000):
-
-```bash
-mkdir -p data && sudo chown -R 1000:1000 data
-```
+- **Si al arrancar sale** `❌ No se puede abrir ni crear la base de datos`, el contenedor (usuario 1000) no puede escribir en la carpeta `data`. Ejecuta `sudo chown -R 1000:1000 data` en la carpeta del proyecto y vuelve a arrancar.
 
 ## Editar el catálogo de alimentos
 

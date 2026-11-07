@@ -22,9 +22,19 @@ const dbFile = resolve(dataDir, env.DB_FILE || 'bocaditos.db')
 const staticDir = env.STATIC_DIR === '' ? undefined : resolve(env.STATIC_DIR || './dist')
 const seedDemo = /^(1|true|yes|s[ií])$/i.test(env.SEED_DEMO_DATA ?? '') || process.argv.includes('--seed-demo')
 
-const { store, created, seeded, schemaVersion } = openStore(dbFile, {
-  seed: seedDemo ? () => buildDemoData() : undefined,
-})
+function open() {
+  try {
+    return openStore(dbFile, { seed: seedDemo ? () => buildDemoData() : undefined })
+  } catch (e) {
+    console.error(`\n❌ No se puede abrir ni crear la base de datos ${dbFile}`)
+    console.error(`   ${e instanceof Error ? e.message : String(e)}`)
+    console.error(`   Comprueba que la carpeta ${dataDir} existe y que se puede escribir en ella.`)
+    console.error('   Con Docker y DATA_PATH=./data, ejecuta en la carpeta del proyecto:')
+    console.error('     sudo chown -R 1000:1000 data\n')
+    process.exit(1)
+  }
+}
+const { store, created, seeded, schemaVersion } = open()
 
 if (created) {
   console.log(`🆕 Base de datos creada en ${dbFile} (esquema v${schemaVersion})`)
