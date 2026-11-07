@@ -1,0 +1,35 @@
+services:
+  bocaditos:
+    build: .
+    image: bocaditos-blw:latest
+    container_name: bocaditos-blw
+    ports:
+      - "${PORT:-8080}:8080"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  # Proxy HTTPS opcional (necesario para instalar la PWA en el móvil desde un dominio).
+  # Uso:  DOMAIN=bocaditos.midominio.com docker compose --profile https up -d
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    depends_on:
+      - bocaditos
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
