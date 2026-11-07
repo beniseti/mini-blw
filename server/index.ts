@@ -35,7 +35,8 @@ if (created) {
 
 const app = createApp(store, { staticDir })
 const server = serve({ fetch: app.fetch, port, hostname: '0.0.0.0' }, (info) => {
-  console.log(`🥑 Bocaditos BLW escuchando en http://localhost:${info.port}`)
+  const version = env.npm_package_version ? ` v${env.npm_package_version}` : ''
+  console.log(`🥑 Bocaditos BLW${version} escuchando en http://localhost:${info.port}`)
   if (!staticDir) console.log('   (solo API: la app la sirve Vite en modo desarrollo)')
 })
 

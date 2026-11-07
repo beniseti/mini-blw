@@ -3,7 +3,20 @@
 //   - App:  http://localhost:5173  (Vite redirige /api al servidor)
 // La base de datos de desarrollo se crea en ./data/bocaditos.db con datos de ejemplo.
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+
+const [major, minor] = process.versions.node.split('.').map(Number)
+if (major < 22 || (major === 22 && minor < 18)) {
+  console.error(`
+❌ Necesitas Node.js 22.18 o superior y tienes ${process.version}.
+   Descarga la versión LTS en https://nodejs.org, instálala y vuelve a abrir la terminal.
+`)
+  process.exit(1)
+}
+
+const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+console.log(`\n🥑 Bocaditos BLW v${version} (desarrollo) · Node ${process.version}\n`)
 
 const viteBin = fileURLToPath(new URL('../node_modules/vite/bin/vite.js', import.meta.url))
 const apiPort = process.env.API_PORT || '8787'
