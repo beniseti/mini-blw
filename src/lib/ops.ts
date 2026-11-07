@@ -31,6 +31,10 @@ export function applyOp(data: AppData, op: SyncOp): AppData {
       return { ...data, lastExportAt: op.at }
     case 'replacePlan':
       return { ...data, plan: op.plan }
+    case 'addPlanItems': {
+      const ids = new Set(op.items.map((i) => i.id))
+      return { ...data, plan: { ...data.plan, items: [...data.plan.items.filter((i) => !ids.has(i.id)), ...op.items] } }
+    }
     case 'movePlanItems': {
       const moves = new Map(op.moves.map((m) => [m.id, m.date]))
       return {

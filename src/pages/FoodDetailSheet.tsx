@@ -3,6 +3,7 @@ import { CATEGORY_BY_ID } from '../data/categories'
 import { FOOD_BY_ID } from '../data/foods'
 import { formatAge, isSuitable, MIN_AGE_LABEL } from '../lib/age'
 import { formatShort } from '../lib/dates'
+import { planItemDoneChecker } from '../lib/plan'
 import { compareTrialsDesc, visualStatus } from '../lib/status'
 import { useStore, type TrialInput } from '../store/AppStore'
 import { AllergenChips } from '../components/foods/AllergenChips'
@@ -62,25 +63,28 @@ function FoodDetail({ foodId, editTrialId, startNew }: { foodId: string; editTri
   const suitable = isSuitable(food.minAge, age?.months ?? null)
   const editingTrial = editing && editing !== 'new' ? foodTrials.find((t) => t.id === editing) : undefined
   const allergens = food.allergens ?? []
-  const planned = !stats.has(food.id) ? data.plan.items.find((i) => i.foodId === food.id) : undefined
+  const isPlanDone = useMemo(() => planItemDoneChecker(data.trials), [data.trials])
+  const planned = data.plan.items
+    .filter((i) => i.foodId === food.id && !isPlanDone(i))
+    .sort((a, b) => (a.date < b.date ? -1 : 1))[0]
 
   // La marca «volver a probar» vive en la prueba más reciente.
   const latest = foodTrials[0]
   const setRetry = (retry: boolean) => {
     if (!latest) return
     const { foodId, date, liked, reaction, notes } = latest
-    updateTrial(latest.id, { foodId, date, liked, reaction, notes, retry })
-    toast.show(retry ? '🔁 Marcado para volver a probar' : '✓ Ya no está pendiente de repetir')
+    const rescheduled = updateTrial(latest.id, { foodId, date, liked, reaction, notes, retry })
+    toast.show(
+      retry
+        ? `🔁 Marcado para volver a probar${rescheduled ? ` · en el plan el ${formatShort(rescheduled, today)}` : ''}`
+        : '✓ Ya no está pendiente de repetir',
+    )
   }
 
   const save = (input: TrialInput) => {
-    if (editingTrial) {
-      updateTrial(editingTrial.id, input)
-      toast.show('✓ Cambios guardados')
-    } else {
-      addTrial(input)
-      toast.show(`✓ Prueba de ${food.name.toLowerCase()} guardada`)
-    }
+    const rescheduled = editingTrial ? updateTrial(editingTrial.id, input) : addTrial(input)
+    const saved = editingTrial ? '✓ Cambios guardados' : `✓ Prueba de ${food.name.toLowerCase()} guardada`
+    toast.show(rescheduled ? `${saved} · 🔁 en el plan el ${formatShort(rescheduled, today)}` : saved)
     setEditing(null)
   }
 
@@ -145,7 +149,8 @@ function FoodDetail({ foodId, editTrialId, startNew }: { foodId: string; editTri
 
       {planned && (
         <p className="rounded-2xl bg-lilac-100 p-3 text-sm font-bold text-lilac-700">
-          📋 En el plan de comidas para {planned.date === today ? 'hoy' : `el ${formatShort(planned.date, today)}`}
+          {planned.retryOf ? '🔁 Repetición programada en el plan' : '📋 En el plan de comidas'} para{' '}
+          {planned.date === today ? 'hoy' : `el ${formatShort(planned.date, today)}`}
           {planned.date < today ? ' (atrasado)' : ''}
         </p>
       )}

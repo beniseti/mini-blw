@@ -49,11 +49,12 @@ export function PlanDayCard({ day, today, trials, onRegister, onOpenFood, onPost
       <ul className="flex flex-col gap-2">
         {day.items.map(({ item, food, done }) => {
           if (!food) return null
+          const isRetry = !!item.retryOf
           const allergenWarning =
-            !done && food.allergens?.length
+            !done && !isRetry && food.allergens?.length
               ? checkNewAllergen(food, day.date < today ? today : day.date, trials, FOOD_BY_ID)
               : null
-          const newAllergen = !done && food.allergens?.some((a) => !trials.some((t) => FOOD_BY_ID.get(t.foodId)?.allergens?.includes(a)))
+          const newAllergen = !done && !isRetry && food.allergens?.some((a) => !trials.some((t) => FOOD_BY_ID.get(t.foodId)?.allergens?.includes(a)))
           return (
             <li key={item.id} className="flex items-center gap-3 rounded-2xl bg-white/80 p-2 ring-1 ring-line/60">
               <button
@@ -70,6 +71,9 @@ export function PlanDayCard({ day, today, trials, onRegister, onOpenFood, onPost
                     {food.name}
                   </span>
                   <span className="mt-0.5 flex flex-wrap gap-1">
+                    {isRetry && (
+                      <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[0.7rem] font-bold text-sky-700">🔁 Repetir</span>
+                    )}
                     {newAllergen &&
                       food.allergens!.map((a) => (
                         <span key={a} className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.7rem] font-bold text-amber-700">
@@ -86,7 +90,9 @@ export function PlanDayCard({ day, today, trials, onRegister, onOpenFood, onPost
                 </span>
               </button>
               {done ? (
-                <span className="shrink-0 rounded-full bg-mint-200 px-3 py-1.5 text-sm font-bold text-mint-800">✓ Probado</span>
+                <span className="shrink-0 rounded-full bg-mint-200 px-3 py-1.5 text-sm font-bold text-mint-800">
+                  {isRetry ? '✓ Repetido' : '✓ Probado'}
+                </span>
               ) : (
                 <div className="flex shrink-0 items-center gap-1">
                   <button

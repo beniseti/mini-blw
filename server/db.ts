@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { emptyPlan, parseOp } from '../src/shared/validate.ts'
-import type { AppData, MealPlan, Profile, SyncOp, Trial } from '../src/types.ts'
+import type { AppData, MealPlan, PlanItem, Profile, SyncOp, Trial } from '../src/types.ts'
 
 /**
  * Migraciones del esquema. Se aplican en orden y se guarda la versión en
@@ -62,6 +62,10 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE trials ADD COLUMN retry INTEGER NOT NULL DEFAULT 0;
   `,
+  // v4: repeticiones en el plan (prueba que pidió volver a probar)
+  `
+  ALTER TABLE plan_items ADD COLUMN retry_of TEXT;
+  `,
 ]
 
 /** Las operaciones aplicadas se recuerdan 30 días (de sobra para cualquier reintento). */
@@ -97,6 +101,7 @@ interface PlanRow {
   id: string
   food_id: string
   date: string
+  retry_of: string | null
 }
 interface TrialRow {
   id: string
@@ -173,16 +178,20 @@ export function openStore(file: string, options: OpenOptions = {}): OpenResult {
     getMeta: db.prepare('SELECT value FROM meta WHERE key = ?'),
     setMeta: db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value'),
     deleteMeta: db.prepare('DELETE FROM meta WHERE key = ?'),
-    listPlan: db.prepare('SELECT id, food_id, date FROM plan_items ORDER BY date, rowid'),
-    insertPlanItem: db.prepare('INSERT OR REPLACE INTO plan_items (id, food_id, date, created_at) VALUES (?, ?, ?, ?)'),
+    listPlan: db.prepare('SELECT id, food_id, date, retry_of FROM plan_items ORDER BY date, rowid'),
+    insertPlanItem: db.prepare(
+      'INSERT OR REPLACE INTO plan_items (id, food_id, date, retry_of, created_at) VALUES (?, ?, ?, ?, ?)',
+    ),
     movePlanItem: db.prepare('UPDATE plan_items SET date = ? WHERE id = ?'),
     deletePlanItem: db.prepare('DELETE FROM plan_items WHERE id = ?'),
     deleteAllPlan: db.prepare('DELETE FROM plan_items'),
   }
 
+  const writePlanItem = (item: PlanItem, now: string) =>
+    q.insertPlanItem.run(item.id, item.foodId, item.date, item.retryOf ?? null, now)
   const writePlan = (plan: MealPlan, now: string) => {
     q.deleteAllPlan.run()
-    for (const item of plan.items) q.insertPlanItem.run(item.id, item.foodId, item.date, now)
+    for (const item of plan.items) writePlanItem(item, now)
     q.setMeta.run('plan_per_day', String(plan.perDay))
   }
 
@@ -231,6 +240,9 @@ export function openStore(file: string, options: OpenOptions = {}): OpenResult {
       case 'replacePlan':
         writePlan(op.plan, now)
         return
+      case 'addPlanItems':
+        for (const item of op.items) writePlanItem(item, now)
+        return
       case 'movePlanItems':
         for (const m of op.moves) q.movePlanItem.run(m.date, m.id)
         return
@@ -257,7 +269,9 @@ export function openStore(file: string, options: OpenOptions = {}): OpenResult {
       )
       const exported = q.getMeta.get('last_export_at') as { value: string } | undefined
       const perDay = q.getMeta.get('plan_per_day') as { value: string } | undefined
-      const items = (q.listPlan.all() as unknown as PlanRow[]).map((r) => ({ id: r.id, foodId: r.food_id, date: r.date }))
+      const items = (q.listPlan.all() as unknown as PlanRow[]).map(
+        (r): PlanItem => ({ id: r.id, foodId: r.food_id, date: r.date, ...(r.retry_of ? { retryOf: r.retry_of } : {}) }),
+      )
       return {
         version: 1,
         profile: p ? { name: p.name, birthDate: p.birth_date } : null,

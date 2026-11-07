@@ -37,7 +37,7 @@ describe('openStore: creación inicial', () => {
     const first = openStore(file, { seed: () => buildDemoData('2026-11-07') })
     expect(first.created).toBe(true)
     expect(first.seeded).toBe(true)
-    expect(first.schemaVersion).toBe(3)
+    expect(first.schemaVersion).toBe(4)
     const snap = first.store.snapshot()
     expect(snap.profile?.name).toBe('Lucía (demo)')
     expect(snap.trials.length).toBeGreaterThan(10)
@@ -185,7 +185,7 @@ describe('plan de comidas', () => {
     raw.close()
     // Al abrirla, migra a v2 conservando los datos
     const second = openStore(file)
-    expect(second.schemaVersion).toBe(3)
+    expect(second.schemaVersion).toBe(4)
     expect(second.store.snapshot().trials.map((t) => t.id)).toEqual(['vieja'])
     second.store.applyOps([{ opId: 'p', type: 'replacePlan', plan }])
     expect(second.store.snapshot().plan.items).toHaveLength(2)
@@ -211,11 +211,44 @@ describe('volver a probar', () => {
     first.store.applyOps([upsert('vieja')])
     first.store.close()
     const raw = new DatabaseSync(file)
-    raw.exec('ALTER TABLE trials DROP COLUMN retry; PRAGMA user_version = 2')
+    raw.exec('ALTER TABLE trials DROP COLUMN retry; ALTER TABLE plan_items DROP COLUMN retry_of; PRAGMA user_version = 2')
     raw.close()
     const second = openStore(file)
-    expect(second.schemaVersion).toBe(3)
+    expect(second.schemaVersion).toBe(4)
     expect(second.store.snapshot().trials).toEqual([expect.objectContaining({ id: 'vieja', retry: false })])
+    second.store.close()
+  })
+})
+
+describe('repeticiones en el plan', () => {
+  it('addPlanItems guarda retryOf y se puede borrar', () => {
+    const { store } = openStore(':memory:')
+    store.applyOps([{ opId: 'p', type: 'replacePlan', plan: { perDay: 2, items: [{ id: 'n', foodId: 'pera', date: '2026-11-07' }] } }])
+    store.applyOps([{ opId: 'a', type: 'addPlanItems', items: [{ id: 'r', foodId: 'kiwi', date: '2026-11-10', retryOf: 't1' }] }])
+    expect(store.snapshot().plan.items).toEqual([
+      { id: 'n', foodId: 'pera', date: '2026-11-07' },
+      { id: 'r', foodId: 'kiwi', date: '2026-11-10', retryOf: 't1' },
+    ])
+    store.applyOps([{ opId: 'd', type: 'deletePlanItem', id: 'r' }])
+    expect(store.snapshot().plan.items).toHaveLength(1)
+    // Una lista vacía o con elementos inválidos se rechaza
+    expect(store.applyOps([{ opId: 'x', type: 'addPlanItems', items: [] }]).rejected).toBe(1)
+  })
+
+  it('una base de datos con esquema v3 se actualiza a v4 conservando el plan', async () => {
+    const { DatabaseSync } = await import('node:sqlite')
+    const dir = mkdtempSync(join(tmpdir(), 'bocaditos-'))
+    dirs.push(dir)
+    const file = join(dir, 'v3.db')
+    const first = openStore(file)
+    first.store.applyOps([{ opId: 'p', type: 'replacePlan', plan: { perDay: 1, items: [{ id: 'n', foodId: 'pera', date: '2026-11-07' }] } }])
+    first.store.close()
+    const raw = new DatabaseSync(file)
+    raw.exec('ALTER TABLE plan_items DROP COLUMN retry_of; PRAGMA user_version = 3')
+    raw.close()
+    const second = openStore(file)
+    expect(second.schemaVersion).toBe(4)
+    expect(second.store.snapshot().plan.items).toEqual([{ id: 'n', foodId: 'pera', date: '2026-11-07' }])
     second.store.close()
   })
 })

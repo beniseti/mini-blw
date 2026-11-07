@@ -50,6 +50,8 @@ describe('applyOp (cambios optimistas en el cliente)', () => {
     })
     d = applyOp(d, { opId: 'p2', type: 'movePlanItems', moves: [{ id: 'i1', date: '2026-11-09' }] })
     d = applyOp(d, { opId: 'p3', type: 'deletePlanItem', id: 'i2' })
+    const withRetry = applyOp(d, { opId: 'p5', type: 'addPlanItems', items: [{ id: 'r', foodId: 'kiwi', date: '2026-11-12', retryOf: 'x' }] })
+    expect(withRetry.plan.items.map((i) => i.id)).toEqual(['i1', 'r'])
     expect(d.plan).toEqual({ perDay: 1, items: [{ id: 'i1', foodId: 'pera', date: '2026-11-09' }] })
     // Importar una copia sin plan conserva el plan actual
     expect(applyOp(d, { opId: 'p4', type: 'replaceAll', profile: null, trials: [] }).plan.items).toHaveLength(1)

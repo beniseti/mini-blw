@@ -68,6 +68,11 @@ export interface PlanItem {
   foodId: string
   /** YYYY-MM-DD */
   date: string
+  /**
+   * Si es una repetición («volver a probar»): id de la prueba que pidió repetirlo.
+   * Se da por hecha cuando hay una prueba posterior de ese alimento.
+   */
+  retryOf?: string
 }
 
 /** Plan de comidas: alimentos nuevos a introducir, 1 o 2 por día. */
@@ -103,6 +108,8 @@ export type SyncOp =
   | { opId: string; type: 'markExported'; at: string }
   /** Crear o rehacer el plan de comidas (sustituye el anterior). */
   | { opId: string; type: 'replacePlan'; plan: MealPlan }
+  /** Añadir alimentos al plan (p. ej. una repetición). */
+  | { opId: string; type: 'addPlanItems'; items: PlanItem[] }
   /** Cambiar de fecha alimentos del plan (aplazar). */
   | { opId: string; type: 'movePlanItems'; moves: { id: string; date: string }[] }
   | { opId: string; type: 'deletePlanItem'; id: string }

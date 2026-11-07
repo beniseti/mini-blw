@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { FOOD_BY_ID, FOODS } from '../data/foods'
-import type { AllergenId, MealPlan, PlanItem } from '../types'
+import type { AllergenId, MealPlan, PlanItem, Trial } from '../types'
 import { daysBetween } from './dates'
-import { catchUpMoves, generatePlan, groupPlan, planOrder, planProgress, postponeMoves, sixMonthsDate } from './plan'
+import {
+  catchUpMoves,
+  generatePlan,
+  groupPlan,
+  planItemDoneChecker,
+  planOrder,
+  planProgress,
+  postponeMoves,
+  retryPlanChange,
+  retrySlot,
+  sixMonthsDate,
+} from './plan'
 
 let n = 0
 const newId = () => `p${++n}`
@@ -113,7 +124,7 @@ describe('aplazar', () => {
       { id: 'd', foodId: 'pera', date: '2026-11-08' },
     ],
   }
-  const tried = (id: string) => id === 'brocoli'
+  const tried = (item: PlanItem) => item.foodId === 'brocoli'
 
   it('postponeMoves mueve ese día y los siguientes (solo lo pendiente)', () => {
     expect(postponeMoves(plan, tried, '2026-11-07')).toEqual([
@@ -138,5 +149,85 @@ describe('aplazar', () => {
     expect(days.map((d) => d.date)).toEqual(['2026-11-05', '2026-11-07', '2026-11-08'])
     expect(days[0].items.map((i) => i.done)).toEqual([true, false])
     expect(planProgress(plan, tried)).toEqual({ done: 1, total: 4, firstPending: '2026-11-05' })
+  })
+})
+
+describe('volver a probar en el plan', () => {
+  const trial = (id: string, foodId: string, date: string, retry = false, hour = '10'): Trial => ({
+    id,
+    foodId,
+    date,
+    liked: 'dislike',
+    reaction: 'none',
+    notes: '',
+    retry,
+    createdAt: `${date}T${hour}:00:00.000Z`,
+  })
+  const base: MealPlan = {
+    perDay: 2,
+    items: [
+      { id: 'n1', foodId: 'kiwi', date: '2026-11-07' },
+      { id: 'n2', foodId: 'huevo', date: '2026-11-10' }, // día de alérgeno nuevo (va solo)
+      { id: 'n3', foodId: 'pera', date: '2026-11-11' },
+    ],
+  }
+  let k = 0
+  const ids = () => `r${++k}`
+
+  it('marcar «volver a probar» programa una repetición 3 días después', () => {
+    const trials = [trial('t1', 'kiwi', '2026-11-07', true)]
+    const change = retryPlanChange({ plan: base, trials, foodId: 'kiwi', foodsById: FOOD_BY_ID, today: '2026-11-07', newId: ids })
+    expect(change.remove).toEqual([])
+    // El 10 es día de alérgeno nuevo (huevo): pasa al 11
+    expect(change.add).toMatchObject({ foodId: 'kiwi', date: '2026-11-11', retryOf: 't1' })
+  })
+
+  it('si la prueba es antigua, como pronto mañana', () => {
+    const trials = [trial('t1', 'kiwi', '2026-10-01', true)]
+    const change = retryPlanChange({ plan: base, trials, foodId: 'kiwi', foodsById: FOOD_BY_ID, today: '2026-11-07', newId: ids })
+    expect(change.add?.date).toBe('2026-11-08')
+  })
+
+  it('la repetición se da por hecha con una prueba posterior; si vuelve a pedir repetir, se reprograma', () => {
+    const plan: MealPlan = { ...base, items: [...base.items, { id: 'r', foodId: 'kiwi', date: '2026-11-11', retryOf: 't1' }] }
+    const first = [trial('t1', 'kiwi', '2026-11-07', true)]
+    expect(planItemDoneChecker(first)(plan.items[3])).toBe(false)
+    // Mismo día pero más tarde también cuenta como posterior
+    const again = [...first, trial('t2', 'kiwi', '2026-11-11', true, '18')]
+    expect(planItemDoneChecker(again)(plan.items[3])).toBe(true)
+    const change = retryPlanChange({ plan, trials: again, foodId: 'kiwi', foodsById: FOOD_BY_ID, today: '2026-11-11', newId: ids })
+    expect(change.remove).toEqual([]) // la anterior queda como hecha (historial)
+    expect(change.add).toMatchObject({ date: '2026-11-14', retryOf: 't2' })
+  })
+
+  it('no duplica una repetición ya programada', () => {
+    const plan: MealPlan = { ...base, items: [...base.items, { id: 'r', foodId: 'kiwi', date: '2026-11-11', retryOf: 't1' }] }
+    const trials = [trial('t1', 'kiwi', '2026-11-07', true)]
+    expect(retryPlanChange({ plan, trials, foodId: 'kiwi', foodsById: FOOD_BY_ID, today: '2026-11-07', newId: ids })).toEqual({
+      remove: [],
+      add: null,
+    })
+  })
+
+  it('quitar la marca elimina la repetición pendiente', () => {
+    const plan: MealPlan = { ...base, items: [...base.items, { id: 'r', foodId: 'kiwi', date: '2026-11-11', retryOf: 't1' }] }
+    const trials = [trial('t1', 'kiwi', '2026-11-07', false)]
+    expect(retryPlanChange({ plan, trials, foodId: 'kiwi', foodsById: FOOD_BY_ID, today: '2026-11-07', newId: ids })).toEqual({
+      remove: ['r'],
+      add: null,
+    })
+  })
+
+  it('retrySlot salta los días de alérgeno nuevo pendiente', () => {
+    const isDone = planItemDoneChecker([])
+    expect(retrySlot(base, isDone, FOOD_BY_ID, new Map(), '2026-11-10')).toBe('2026-11-11')
+    // Si el huevo ya está introducido, ese día deja de ser especial
+    expect(retrySlot(base, isDone, FOOD_BY_ID, new Map([['huevo', '2026-11-01']]), '2026-11-10')).toBe('2026-11-10')
+  })
+
+  it('los alimentos nuevos se dan por hechos con cualquier prueba', () => {
+    const isDone = planItemDoneChecker([trial('t1', 'kiwi', '2026-11-07', true)])
+    expect(isDone(base.items[0])).toBe(true)
+    expect(isDone(base.items[2])).toBe(false)
   })
 })

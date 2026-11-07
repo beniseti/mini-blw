@@ -77,7 +77,9 @@ export function parseTrials(raw: unknown[]): { trials: Trial[]; skipped: number 
 export function parsePlanItem(raw: unknown): PlanItem | null {
   if (!isObject(raw)) return null
   if (!isNonEmptyString(raw.id, 100) || !isNonEmptyString(raw.foodId, 100) || !isValidISODate(raw.date)) return null
-  return { id: raw.id, foodId: raw.foodId, date: raw.date }
+  const item: PlanItem = { id: raw.id, foodId: raw.foodId, date: raw.date }
+  if (isNonEmptyString(raw.retryOf, 100)) item.retryOf = raw.retryOf
+  return item
 }
 
 /** Valida un plan de comidas. Devuelve `null` si no tiene el formato esperado. */
@@ -135,6 +137,11 @@ export function parseOp(raw: unknown): SyncOp | null {
     case 'replacePlan': {
       const plan = parsePlan(raw.plan)
       return plan ? { opId, type: 'replacePlan', plan } : null
+    }
+    case 'addPlanItems': {
+      if (!Array.isArray(raw.items) || raw.items.length === 0 || raw.items.length > MAX_PLAN_ITEMS) return null
+      const items = raw.items.map(parsePlanItem)
+      return items.every((i): i is PlanItem => i !== null) ? { opId, type: 'addPlanItems', items } : null
     }
     case 'movePlanItems': {
       if (!Array.isArray(raw.moves) || raw.moves.length > MAX_PLAN_ITEMS) return null

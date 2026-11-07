@@ -14,8 +14,8 @@ import { firstIntroductions } from '../lib/allergenCheck'
 import { getAge, type BabyAge } from '../lib/age'
 import { toISODate } from '../lib/dates'
 import { applyOp, applyOps } from '../lib/ops'
-import { catchUpMoves, generatePlan, postponeMoves } from '../lib/plan'
-import { computeFoodStats, type FoodStats } from '../lib/status'
+import { catchUpMoves, generatePlan, planItemDoneChecker, postponeMoves, retryPlanChange } from '../lib/plan'
+import { computeFoodStats, retryFoods, type FoodStats } from '../lib/status'
 import { newId } from '../lib/text'
 import type { AllergenId, AppData, Profile, SyncOp, Trial } from '../types'
 import { SyncError, syncWithServer } from './api'
@@ -71,8 +71,10 @@ interface AppStore {
   sync: SyncState
   syncNow: () => void
   setProfile: (profile: Profile | null) => void
-  addTrial: (input: TrialInput) => void
-  updateTrial: (id: string, changes: TrialInput) => void
+  /** Devuelve la fecha en la que se reprograma en el plan si se marcó «volver a probar» (o null). */
+  addTrial: (input: TrialInput) => string | null
+  /** Devuelve la fecha en la que se reprograma en el plan si se marcó «volver a probar» (o null). */
+  updateTrial: (id: string, changes: TrialInput) => string | null
   deleteTrial: (id: string) => void
   replaceAll: (data: AppData) => void
   markExported: () => void
@@ -87,10 +89,6 @@ interface AppStore {
   clearPlan: () => void
 }
 
-function triedChecker(data: AppData): (foodId: string) => boolean {
-  const tried = new Set(data.trials.map((t) => t.foodId))
-  return (foodId) => tried.has(foodId)
-}
 
 const StoreContext = createContext<AppStore | null>(null)
 
@@ -200,16 +198,56 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     (profile: Profile | null) => local({ opId: newId(), type: 'setProfile', profile }),
     [local],
   )
-  const addTrial = useCallback(
-    (input: TrialInput) =>
-      local({ opId: newId(), type: 'upsertTrial', trial: { ...input, id: newId(), createdAt: new Date().toISOString() } }),
+  /**
+   * Mantiene el plan al día con la marca «volver a probar» de un alimento: programa
+   * una repetición o quita las que ya no hacen falta. `trials` ya incluye el cambio.
+   */
+  const syncRetryPlan = useCallback(
+    (trials: Trial[], foodId: string): string | null => {
+      const plan = stateRef.current.data.plan
+      if (plan.items.length === 0) return null // sin plan, la lista «Para volver a probar» basta
+      const change = retryPlanChange({ plan, trials, foodId, foodsById: FOOD_BY_ID, today: toISODate(), newId })
+      for (const id of change.remove) local({ opId: newId(), type: 'deletePlanItem', id })
+      if (change.add) local({ opId: newId(), type: 'addPlanItems', items: [change.add] })
+      return change.add?.date ?? null
+    },
     [local],
   )
-  const updateTrial = useCallback(
-    (id: string, changes: TrialInput) => dispatch({ type: 'updateTrial', opId: newId(), id, changes }),
-    [],
+  const addTrial = useCallback(
+    (input: TrialInput) => {
+      const trial: Trial = { ...input, id: newId(), createdAt: new Date().toISOString() }
+      local({ opId: newId(), type: 'upsertTrial', trial })
+      return syncRetryPlan([...stateRef.current.data.trials, trial], trial.foodId)
+    },
+    [local, syncRetryPlan],
   )
-  const deleteTrial = useCallback((id: string) => local({ opId: newId(), type: 'deleteTrial', id }), [local])
+  const updateTrial = useCallback(
+    (id: string, changes: TrialInput) => {
+      const trials = stateRef.current.data.trials
+      const before = trials.find((t) => t.id === id)
+      dispatch({ type: 'updateTrial', opId: newId(), id, changes })
+      if (!before) return null
+      const after = { ...before, ...changes }
+      return syncRetryPlan(
+        trials.map((t) => (t.id === id ? after : t)),
+        after.foodId,
+      )
+    },
+    [syncRetryPlan],
+  )
+  const deleteTrial = useCallback(
+    (id: string) => {
+      const trials = stateRef.current.data.trials
+      const removed = trials.find((t) => t.id === id)
+      local({ opId: newId(), type: 'deleteTrial', id })
+      if (removed)
+        syncRetryPlan(
+          trials.filter((t) => t.id !== id),
+          removed.foodId,
+        )
+    },
+    [local, syncRetryPlan],
+  )
   const replaceAll = useCallback(
     (next: AppData) =>
       local({ opId: newId(), type: 'replaceAll', profile: next.profile, trials: next.trials, plan: next.plan }),
@@ -224,7 +262,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const createPlan = useCallback(
     (perDay: 1 | 2, startDate: string) => {
       const d = stateRef.current.data
-      const isTried = triedChecker(d)
+      const isDone = planItemDoneChecker(d.trials)
       const items = generatePlan({
         foods: FOODS,
         tried: new Set(d.trials.map((t) => t.foodId)),
@@ -234,9 +272,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         startDate,
         newId,
       })
-      // Lo ya probado se queda como historial del plan.
-      const done = d.plan.items.filter((i) => isTried(i.foodId))
-      local({ opId: newId(), type: 'replacePlan', plan: { perDay, items: [...done, ...items] } })
+      // Lo ya hecho se queda como historial del plan.
+      let plan = { perDay, items: [...d.plan.items.filter(isDone), ...items] }
+      // Los alimentos pendientes de «volver a probar» también entran en el plan.
+      for (const food of retryFoods(FOODS, computeFoodStats(d.trials))) {
+        const change = retryPlanChange({ plan, trials: d.trials, foodId: food.id, foodsById: FOOD_BY_ID, today: toISODate(), newId })
+        if (change.add) plan = { ...plan, items: [...plan.items, change.add] }
+      }
+      local({ opId: newId(), type: 'replacePlan', plan })
       return items.length
     },
     [local],
@@ -251,13 +294,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const postponePlanDay = useCallback(
     (date: string) => {
       const d = stateRef.current.data
-      return movePlan(postponeMoves(d.plan, triedChecker(d), date, 1))
+      return movePlan(postponeMoves(d.plan, planItemDoneChecker(d.trials), date, 1))
     },
     [movePlan],
   )
   const catchUpPlan = useCallback(() => {
     const d = stateRef.current.data
-    return movePlan(catchUpMoves(d.plan, triedChecker(d), toISODate()))
+    return movePlan(catchUpMoves(d.plan, planItemDoneChecker(d.trials), toISODate()))
   }, [movePlan])
   const removePlanItem = useCallback((id: string) => local({ opId: newId(), type: 'deletePlanItem', id }), [local])
   const clearPlan = useCallback(

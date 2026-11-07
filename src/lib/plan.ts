@@ -1,7 +1,8 @@
 import { ALLERGEN_WAIT_DAYS } from '../data/allergens'
-import { PLAN_CATEGORY_ORDER, PLAN_FIRST_FOODS } from '../data/plan'
-import type { AllergenId, Food, MealPlan, PlanItem } from '../types'
+import { PLAN_CATEGORY_ORDER, PLAN_FIRST_FOODS, PLAN_RETRY_AFTER_DAYS } from '../data/plan'
+import type { AllergenId, Food, MealPlan, PlanItem, Trial } from '../types'
 import { addMonthsClamped, getAge } from './age'
+import { firstIntroductions } from './allergenCheck'
 import { addDays, daysBetween } from './dates'
 
 /** Como mucho se planifican 2 años (evita bucles si no hay nada que planificar). */
@@ -91,6 +92,46 @@ export function generatePlan(opts: GenerateOptions): PlanItem[] {
   return items
 }
 
+/** ¿La prueba `a` es posterior a `b`? (por fecha y, el mismo día, por hora de registro) */
+function isAfter(a: Trial, b: Trial): boolean {
+  return a.date > b.date || (a.date === b.date && a.createdAt > b.createdAt)
+}
+
+/** Prueba más reciente de un alimento. */
+export function latestTrialOf(trials: Trial[], foodId: string): Trial | undefined {
+  let latest: Trial | undefined
+  for (const t of trials) if (t.foodId === foodId && (!latest || isAfter(t, latest))) latest = t
+  return latest
+}
+
+export type PlanItemDone = (item: PlanItem) => boolean
+
+/**
+ * Cuándo se da por hecho un alimento del plan:
+ *  - alimento nuevo: en cuanto tiene alguna prueba;
+ *  - repetición (`retryOf`): cuando hay una prueba de ese alimento posterior a la
+ *    que pidió repetirlo (o si se quitó la marca «volver a probar»).
+ */
+export function planItemDoneChecker(trials: Trial[]): PlanItemDone {
+  const tried = new Set<string>()
+  const byId = new Map<string, Trial>()
+  const latest = new Map<string, Trial>()
+  for (const t of trials) {
+    tried.add(t.foodId)
+    byId.set(t.id, t)
+    const cur = latest.get(t.foodId)
+    if (!cur || isAfter(t, cur)) latest.set(t.foodId, t)
+  }
+  return (item) => {
+    if (!item.retryOf) return tried.has(item.foodId)
+    const last = latest.get(item.foodId)
+    if (!last) return false
+    const origin = byId.get(item.retryOf)
+    if (!origin) return !last.retry // la prueba original se borró
+    return isAfter(last, origin) || !origin.retry
+  }
+}
+
 export interface PlanDayItem {
   item: PlanItem
   food: Food | undefined
@@ -104,11 +145,11 @@ export interface PlanDay {
   done: boolean
 }
 
-/** Agrupa el plan por días, en orden. Un alimento cuenta como hecho si ya tiene alguna prueba. */
-export function groupPlan(plan: MealPlan, foodsById: Map<string, Food>, isTried: (foodId: string) => boolean): PlanDay[] {
+/** Agrupa el plan por días, en orden. */
+export function groupPlan(plan: MealPlan, foodsById: Map<string, Food>, isDone: PlanItemDone): PlanDay[] {
   const days = new Map<string, PlanDayItem[]>()
   for (const item of plan.items) {
-    const entry = { item, food: foodsById.get(item.foodId), done: isTried(item.foodId) }
+    const entry = { item, food: foodsById.get(item.foodId), done: isDone(item) }
     const list = days.get(item.date)
     if (list) list.push(entry)
     else days.set(item.date, [entry])
@@ -125,11 +166,11 @@ export interface PlanProgress {
   firstPending: string | null
 }
 
-export function planProgress(plan: MealPlan, isTried: (foodId: string) => boolean): PlanProgress {
+export function planProgress(plan: MealPlan, isDone: PlanItemDone): PlanProgress {
   let done = 0
   let firstPending: string | null = null
   for (const i of plan.items) {
-    if (isTried(i.foodId)) done++
+    if (isDone(i)) done++
     else if (!firstPending || i.date < firstPending) firstPending = i.date
   }
   return { done, total: plan.items.length, firstPending }
@@ -141,22 +182,85 @@ export function planProgress(plan: MealPlan, isTried: (foodId: string) => boolea
  */
 export function postponeMoves(
   plan: MealPlan,
-  isTried: (foodId: string) => boolean,
+  isDone: PlanItemDone,
   fromDate: string,
   days = 1,
 ): { id: string; date: string }[] {
-  return plan.items
-    .filter((i) => i.date >= fromDate && !isTried(i.foodId))
-    .map((i) => ({ id: i.id, date: addDays(i.date, days) }))
+  return plan.items.filter((i) => i.date >= fromDate && !isDone(i)).map((i) => ({ id: i.id, date: addDays(i.date, days) }))
 }
 
 /** Si hay días atrasados, desplaza todo lo pendiente para que el primer día pendiente sea hoy. */
-export function catchUpMoves(
-  plan: MealPlan,
-  isTried: (foodId: string) => boolean,
-  today: string,
-): { id: string; date: string }[] {
-  const { firstPending } = planProgress(plan, isTried)
+export function catchUpMoves(plan: MealPlan, isDone: PlanItemDone, today: string): { id: string; date: string }[] {
+  const { firstPending } = planProgress(plan, isDone)
   if (!firstPending || firstPending >= today) return []
-  return postponeMoves(plan, isTried, firstPending, daysBetween(firstPending, today))
+  return postponeMoves(plan, isDone, firstPending, daysBetween(firstPending, today))
+}
+
+/**
+ * Día para una repetición: el primero desde `fromDate` que no sea un día de
+ * alérgeno nuevo (esos días el alimento nuevo va solo).
+ */
+export function retrySlot(
+  plan: MealPlan,
+  isDone: PlanItemDone,
+  foodsById: Map<string, Food>,
+  allergenIntro: Map<AllergenId, string>,
+  fromDate: string,
+): string {
+  const allergenDays = new Set(
+    plan.items
+      .filter((i) => !i.retryOf && !isDone(i))
+      .filter((i) => (foodsById.get(i.foodId)?.allergens ?? []).some((a) => !allergenIntro.has(a)))
+      .map((i) => i.date),
+  )
+  let date = fromDate
+  while (allergenDays.has(date)) date = addDays(date, 1)
+  return date
+}
+
+export interface RetryPlanOptions {
+  plan: MealPlan
+  /** Pruebas ya con el cambio aplicado. */
+  trials: Trial[]
+  foodId: string
+  foodsById: Map<string, Food>
+  today: string
+  newId: () => string
+}
+
+/**
+ * Qué cambiar en el plan cuando cambia la marca «volver a probar» de un alimento:
+ *  - si su prueba más reciente pide repetirlo, se programa una repetición
+ *    PLAN_RETRY_AFTER_DAYS días después (como pronto, mañana);
+ *  - si ya no, se quitan las repeticiones pendientes.
+ */
+export function retryPlanChange(opts: RetryPlanOptions): { remove: string[]; add: PlanItem | null } {
+  const byId = new Map(opts.trials.map((t) => [t.id, t]))
+  const latest = latestTrialOf(opts.trials, opts.foodId)
+  // Repeticiones de este alimento que aún no se han hecho (no hay prueba posterior):
+  // siguen pendientes o se han cancelado al quitar la marca.
+  const open = opts.plan.items.filter((i) => {
+    if (i.foodId !== opts.foodId || !i.retryOf) return false
+    const origin = byId.get(i.retryOf)
+    return !origin || !latest || !isAfter(latest, origin)
+  })
+  if (!latest?.retry) return { remove: open.map((i) => i.id), add: null }
+  // Ya hay una repetición programada para esta misma prueba: no se duplica.
+  if (open.some((i) => i.retryOf === latest.id)) {
+    return { remove: open.filter((i) => i.retryOf !== latest.id).map((i) => i.id), add: null }
+  }
+  const isDone = planItemDoneChecker(opts.trials)
+  const earliest = addDays(latest.date, PLAN_RETRY_AFTER_DAYS)
+  const tomorrow = addDays(opts.today, 1)
+  const date = retrySlot(
+    opts.plan,
+    isDone,
+    opts.foodsById,
+    firstIntroductions(opts.trials, opts.foodsById),
+    earliest > tomorrow ? earliest : tomorrow,
+  )
+  return {
+    remove: open.map((i) => i.id),
+    add: { id: opts.newId(), foodId: opts.foodId, date, retryOf: latest.id },
+  }
 }

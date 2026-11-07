@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { FOOD_BY_ID } from '../../data/foods'
 import { daysBetween, formatShort } from '../../lib/dates'
-import { groupPlan, planProgress } from '../../lib/plan'
+import { groupPlan, planItemDoneChecker, planProgress } from '../../lib/plan'
 import { useStore } from '../../store/AppStore'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
@@ -16,10 +16,11 @@ interface Props {
 
 /** Resumen del plan de comidas para la pantalla de inicio: lo que toca hoy. */
 export function TodayPlanCard({ onRegister, onOpenFood, onGoTab }: Props) {
-  const { data, today, stats, postponePlanDay, catchUpPlan } = useStore()
+  const { data, today, postponePlanDay, catchUpPlan } = useStore()
   const toast = useToast()
-  const days = useMemo(() => groupPlan(data.plan, FOOD_BY_ID, (id) => stats.has(id)), [data.plan, stats])
-  const progress = planProgress(data.plan, (id) => stats.has(id))
+  const isDone = useMemo(() => planItemDoneChecker(data.trials), [data.trials])
+  const days = useMemo(() => groupPlan(data.plan, FOOD_BY_ID, isDone), [data.plan, isDone])
+  const progress = planProgress(data.plan, isDone)
   const seePlan = (
     <button type="button" onClick={() => onGoTab('/plan')} className="min-h-10 rounded-full px-3 text-sm font-bold text-lilac-700">
       Ver plan ›

@@ -59,5 +59,11 @@ export const PLAN_FIRST_FOODS: string[] = [
 /** Orden en que se alternan las categorías para el resto de alimentos. */
 export const PLAN_CATEGORY_ORDER: CategoryId[] = ['verduras', 'frutas', 'proteinas', 'cereales', 'lacteos', 'grasas']
 
+/**
+ * «Volver a probar»: cuántos días después de la prueba se vuelve a programar el
+ * alimento en el plan (nunca en un día de alérgeno nuevo, que va solo).
+ */
+export const PLAN_RETRY_AFTER_DAYS = 3
+
 /** Cuántos días mostrar del plan antes del botón «Ver más». */
 export const PLAN_DAYS_VISIBLE = 10

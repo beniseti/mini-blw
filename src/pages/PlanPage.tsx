@@ -3,7 +3,8 @@ import { ALLERGEN_WAIT_DAYS } from '../data/allergens'
 import { FOOD_BY_ID, FOODS } from '../data/foods'
 import { PLAN_DAYS_VISIBLE } from '../data/plan'
 import { daysBetween, formatShort, isValidISODate } from '../lib/dates'
-import { groupPlan, planProgress, sixMonthsDate } from '../lib/plan'
+import { groupPlan, planItemDoneChecker, planProgress, sixMonthsDate } from '../lib/plan'
+import { retryFoods } from '../lib/status'
 import { useStore } from '../store/AppStore'
 import { AppHeader } from '../components/layout/AppHeader'
 import { RetryList } from '../components/foods/RetryList'
@@ -29,7 +30,6 @@ const PER_DAY_OPTIONS = [
 export function PlanPage({ onOpenFood, onRegister, onGoTab }: Props) {
   const { data, today, stats, createPlan, postponePlanDay, catchUpPlan, removePlanItem, clearPlan } = useStore()
   const toast = useToast()
-  const isTried = (foodId: string) => stats.has(foodId)
 
   const birthDate = data.profile?.birthDate || null
   const minStart = birthDate && sixMonthsDate(birthDate) > today ? sixMonthsDate(birthDate) : today
@@ -42,9 +42,11 @@ export function PlanPage({ onOpenFood, onRegister, onGoTab }: Props) {
   const [confirm, setConfirm] = useState<'redo' | 'clear' | null>(null)
   const [toRemove, setToRemove] = useState<string | null>(null)
 
-  const days = useMemo(() => groupPlan(data.plan, FOOD_BY_ID, (id) => stats.has(id)), [data.plan, stats])
-  const progress = planProgress(data.plan, isTried)
+  const isDone = useMemo(() => planItemDoneChecker(data.trials), [data.trials])
+  const days = useMemo(() => groupPlan(data.plan, FOOD_BY_ID, isDone), [data.plan, isDone])
+  const progress = planProgress(data.plan, isDone)
   const untried = FOODS.filter((f) => !stats.has(f.id)).length
+  const toRetry = retryFoods(FOODS, stats).length
   const hasPlan = data.plan.items.length > 0
   const pendingTotal = progress.total - progress.done
 
@@ -85,14 +87,14 @@ export function PlanPage({ onOpenFood, onRegister, onGoTab }: Props) {
       <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 pb-6">
         {!hasPlan || pendingTotal === 0 ? (
           <Card title={hasPlan ? '🎉 ¡Plan completado!' : '📋 Crea tu plan'} className="bg-lilac-100">
-            {untried === 0 ? (
+            {untried === 0 && toRetry === 0 ? (
               <p className="font-semibold text-ink-soft">Ya ha probado todos los alimentos del catálogo. ¡Enhorabuena!</p>
             ) : (
               <div className="flex flex-col gap-4">
                 <p className="text-sm font-semibold text-ink-soft">
                   {hasPlan
-                    ? `Ha probado todo lo planificado. Quedan ${untried} alimentos del catálogo por probar: crea un plan nuevo para seguir.`
-                    : `Te propongo uno o dos alimentos nuevos cada día (${untried} por probar), empezando por los más recomendados para los primeros días.`}
+                    ? `Ha probado todo lo planificado. Quedan ${untried} alimentos del catálogo por probar${toRetry ? ` y ${toRetry} para volver a probar` : ''}: crea un plan nuevo para seguir.`
+                    : `Te propongo uno o dos alimentos nuevos cada día (${untried} por probar), empezando por los más recomendados para los primeros días${toRetry ? `. También incluyo los ${toRetry} marcados para volver a probar` : ''}.`}
                 </p>
                 <ul className="space-y-1 text-sm font-semibold text-ink-soft">
                   <li>🩸 Primero alimentos ricos en hierro, verduras y frutas.</li>

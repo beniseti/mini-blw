@@ -52,6 +52,7 @@ Muchos alimentos necesitan varias exposiciones antes de que el bebé los acepte.
 - Desde la **ficha de un alimento** ya probado puedes **marcarlo para volver a probar** (o quitar la marca) sin registrar una prueba nueva.
 - El alimento **cuenta como probado** para el progreso y el plan, pero se ve en azul con 🔁. Aparece en la lista **«Para volver a probar»** del inicio y del plan, empezando por el que hace más tiempo que no prueba, con un botón para registrarlo.
 - Cuando registras una prueba nueva **sin** la marca, deja de estar pendiente. En *Alimentos → Filtros → 🔁 Volver a probar* ves todos los pendientes.
+- **En el plan de comidas, se reprograma solo.** Al marcar «volver a probar», el alimento vuelve al plan como **«🔁 Repetir»** **3 días después**, o mañana si la prueba era antigua. Nunca cae en un día de alérgeno nuevo, y te avisa de la fecha. Cuando registras la repetición queda «✓ Repetido»; si esa prueba también lleva 🔁, se vuelve a programar. Si quitas la marca, la repetición desaparece del plan. Al crear o rehacer el plan, también entran los alimentos pendientes de repetir. Los días de espera se cambian en `PLAN_RETRY_AFTER_DAYS` (`src/data/plan.ts`).
 
 ## Cómo funciona
 
