@@ -33,6 +33,10 @@ export default function App() {
     [openOverlay, path],
   )
   const closeFood = useCallback(() => closeOverlay(path), [closeOverlay, path])
+  const showRetry = useCallback(() => {
+    setFilters({ ...DEFAULT_FILTERS, status: 'retry' })
+    goTab('/alimentos')
+  }, [goTab])
   const openCategory = useCallback(
     (category: CategoryId) => {
       setFilters({ ...DEFAULT_FILTERS, category })
@@ -46,7 +50,13 @@ export default function App() {
       <UpdatePrompt />
       <main>
         {path === '/' && (
-          <HomePage onOpenFood={openFood} onRegister={registerFood} onOpenCategory={openCategory} onGoTab={goTab} />
+          <HomePage
+            onOpenFood={openFood}
+            onRegister={registerFood}
+            onShowRetry={showRetry}
+            onOpenCategory={openCategory}
+            onGoTab={goTab}
+          />
         )}
         {path === '/plan' && <PlanPage onOpenFood={openFood} onRegister={registerFood} onGoTab={goTab} />}
         {path === '/alimentos' && <FoodsPage filters={filters} onFiltersChange={setFilters} onOpenFood={openFood} />}

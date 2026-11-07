@@ -6,6 +6,8 @@ export interface FoodStats {
   worstReaction: Reaction
   lastDate: string
   lastLiked: Liked
+  /** La prueba más reciente está marcada como «volver a probar». */
+  retry: boolean
 }
 
 const REACTION_RANK: Record<Reaction, number> = { none: 0, mild: 1, severe: 2 }
@@ -27,6 +29,7 @@ export function computeFoodStats(trials: Trial[]): Map<string, FoodStats> {
         worstReaction: t.reaction,
         lastDate: t.date,
         lastLiked: t.liked,
+        retry: t.retry,
       })
     } else {
       s.count += 1
@@ -55,12 +58,20 @@ export function progressFor(foods: Food[], stats: Map<string, FoodStats>): Progr
   return { tried, total, pct: total ? Math.round((tried / total) * 100) : 0 }
 }
 
-/** Estado visual con la gravedad de la reacción. */
-export type VisualStatus = 'untried' | 'tried' | 'mild' | 'severe'
+/** Estado visual: la reacción tiene prioridad sobre «volver a probar». */
+export type VisualStatus = 'untried' | 'tried' | 'retry' | 'mild' | 'severe'
 
 export function visualStatus(stats: FoodStats | undefined): VisualStatus {
   if (!stats) return 'untried'
   if (stats.worstReaction === 'severe') return 'severe'
   if (stats.worstReaction === 'mild') return 'mild'
+  if (stats.retry) return 'retry'
   return 'tried'
+}
+
+/** Alimentos pendientes de volver a probar, empezando por los que hace más que no prueba. */
+export function retryFoods<T extends { id: string }>(foods: T[], stats: Map<string, FoodStats>): T[] {
+  return foods
+    .filter((f) => stats.get(f.id)?.retry)
+    .sort((a, b) => (stats.get(a.id)!.lastDate < stats.get(b.id)!.lastDate ? -1 : 1))
 }

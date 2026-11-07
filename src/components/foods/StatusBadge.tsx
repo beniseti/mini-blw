@@ -4,6 +4,7 @@ import type { VisualStatus } from '../../lib/status'
 const TEXT: Record<VisualStatus, string> = {
   untried: 'No probado',
   tried: 'Probado',
+  retry: 'Volver a probar',
   mild: 'Reacción leve',
   severe: 'Reacción preocupante',
 }
@@ -11,6 +12,7 @@ const TEXT: Record<VisualStatus, string> = {
 const ICON: Record<VisualStatus, string> = {
   untried: '○',
   tried: '✓',
+  retry: '🔁',
   mild: '⚠️',
   severe: '⚠️',
 }

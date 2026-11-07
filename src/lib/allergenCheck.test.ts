@@ -31,6 +31,7 @@ const trial = (foodId: string, date: string): Trial => ({
   liked: 'like',
   reaction: 'none',
   notes: '',
+  retry: false,
   createdAt: `${date}T10:00:00.000Z`,
 })
 

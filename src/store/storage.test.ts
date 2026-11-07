@@ -8,6 +8,7 @@ const validTrial = {
   liked: 'like',
   reaction: 'none',
   notes: 'Muy bien',
+  retry: false,
   createdAt: '2026-05-01T10:00:00.000Z',
 }
 
@@ -43,6 +44,12 @@ describe('parseAppData', () => {
       expect(result.data.trials[0].notes).toBe('')
       expect(result.data.profile).toBeNull()
     }
+  })
+
+  it('copias antiguas sin "volver a probar": se asume que no', () => {
+    const { retry: _r, ...old } = validTrial
+    const result = parseAppData({ version: 1, trials: [old, { ...validTrial, id: 't2', retry: true }] })
+    expect(result.ok && result.data.trials.map((t) => t.retry)).toEqual([false, true])
   })
 
   it('rechaza archivos de otras apps o formatos', () => {

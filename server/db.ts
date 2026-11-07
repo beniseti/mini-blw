@@ -58,6 +58,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX plan_items_date_idx ON plan_items (date);
   `,
+  // v3: marcar una prueba como "volver a probar"
+  `
+  ALTER TABLE trials ADD COLUMN retry INTEGER NOT NULL DEFAULT 0;
+  `,
 ]
 
 /** Las operaciones aplicadas se recuerdan 30 días (de sobra para cualquier reintento). */
@@ -101,6 +105,7 @@ interface TrialRow {
   liked: Trial['liked']
   reaction: Trial['reaction']
   notes: string
+  retry: number
   created_at: string
 }
 
@@ -147,15 +152,16 @@ export function openStore(file: string, options: OpenOptions = {}): OpenResult {
     insertProfileIfMissing: db.prepare('INSERT OR IGNORE INTO profile (id, name, birth_date, updated_at) VALUES (1, ?, ?, ?)'),
     deleteProfile: db.prepare('DELETE FROM profile'),
     listTrials: db.prepare(
-      'SELECT id, food_id, date, liked, reaction, notes, created_at FROM trials ORDER BY date, created_at',
+      'SELECT id, food_id, date, liked, reaction, notes, retry, created_at FROM trials ORDER BY date, created_at',
     ),
     isDeleted: db.prepare('SELECT 1 AS x FROM deleted_trials WHERE id = ?'),
     upsertTrial: db.prepare(`
-      INSERT INTO trials (id, food_id, date, liked, reaction, notes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO trials (id, food_id, date, liked, reaction, notes, retry, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (id) DO UPDATE SET
         food_id = excluded.food_id, date = excluded.date, liked = excluded.liked,
-        reaction = excluded.reaction, notes = excluded.notes, updated_at = excluded.updated_at`),
+        reaction = excluded.reaction, notes = excluded.notes, retry = excluded.retry,
+        updated_at = excluded.updated_at`),
     deleteTrial: db.prepare('DELETE FROM trials WHERE id = ?'),
     tombstone: db.prepare('INSERT OR IGNORE INTO deleted_trials (id, deleted_at) VALUES (?, ?)'),
     tombstoneAll: db.prepare('INSERT OR IGNORE INTO deleted_trials (id, deleted_at) SELECT id, ? FROM trials'),
@@ -181,7 +187,7 @@ export function openStore(file: string, options: OpenOptions = {}): OpenResult {
   }
 
   const writeTrial = (t: Trial, now: string) =>
-    q.upsertTrial.run(t.id, t.foodId, t.date, t.liked, t.reaction, t.notes, t.createdAt, now)
+    q.upsertTrial.run(t.id, t.foodId, t.date, t.liked, t.reaction, t.notes, t.retry ? 1 : 0, t.createdAt, now)
 
   function apply(op: SyncOp, now: string): void {
     switch (op.type) {
@@ -245,6 +251,7 @@ export function openStore(file: string, options: OpenOptions = {}): OpenResult {
           liked: r.liked,
           reaction: r.reaction,
           notes: r.notes,
+          retry: r.retry === 1,
           createdAt: r.created_at,
         }),
       )

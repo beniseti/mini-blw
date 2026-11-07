@@ -29,7 +29,9 @@ export function FoodsPage({ filters, onFiltersChange, onOpenFood }: Props) {
     return FOODS.filter((f: Food) => {
       if (q && !normalize(f.name).includes(q)) return false
       if (filters.category !== 'all' && f.category !== filters.category) return false
-      if (filters.status !== 'all' && statusOf(stats.get(f.id)) !== filters.status) return false
+      if (filters.status === 'retry') {
+        if (!stats.get(f.id)?.retry) return false
+      } else if (filters.status !== 'all' && statusOf(stats.get(f.id)) !== filters.status) return false
       const allergens = f.allergens ?? []
       if (filters.allergen === 'any' && allergens.length === 0) return false
       if (filters.allergen === 'none' && allergens.length > 0) return false
@@ -56,6 +58,9 @@ export function FoodsPage({ filters, onFiltersChange, onOpenFood }: Props) {
           </span>
           <span className="inline-flex items-center gap-1">
             <span className="h-3 w-3 rounded bg-mint-300" /> Probado
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-3 w-3 rounded bg-sky-300" /> Volver a probar
           </span>
           <span className="inline-flex items-center gap-1">
             <span className="h-3 w-3 rounded bg-amber-300" /> Leve

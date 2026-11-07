@@ -9,6 +9,7 @@ const t = (id: string, notes = ''): Trial => ({
   liked: 'like',
   reaction: 'none',
   notes,
+  retry: false,
   createdAt: `2026-11-01T10:00:00.000Z`,
 })
 

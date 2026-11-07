@@ -50,6 +50,8 @@ export interface Trial {
   liked: Liked
   reaction: Reaction
   notes: string
+  /** Probado, pero hay que volver a ofrecérselo (no le gustó, apenas comió…). */
+  retry: boolean
   /** Marca de tiempo ISO de creación (para ordenar pruebas del mismo día). */
   createdAt: string
 }

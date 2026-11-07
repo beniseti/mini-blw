@@ -47,6 +47,8 @@ export function parseTrial(raw: unknown): Trial | null {
     liked: raw.liked as Liked,
     reaction: raw.reaction as Reaction,
     notes: typeof raw.notes === 'string' ? raw.notes.slice(0, MAX_NOTES) : '',
+    // Las pruebas guardadas antes de existir esta opción no la tienen.
+    retry: raw.retry === true,
     createdAt:
       typeof raw.createdAt === 'string' && !Number.isNaN(Date.parse(raw.createdAt))
         ? raw.createdAt

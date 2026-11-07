@@ -64,6 +64,15 @@ function FoodDetail({ foodId, editTrialId, startNew }: { foodId: string; editTri
   const allergens = food.allergens ?? []
   const planned = !stats.has(food.id) ? data.plan.items.find((i) => i.foodId === food.id) : undefined
 
+  // La marca «volver a probar» vive en la prueba más reciente.
+  const latest = foodTrials[0]
+  const setRetry = (retry: boolean) => {
+    if (!latest) return
+    const { foodId, date, liked, reaction, notes } = latest
+    updateTrial(latest.id, { foodId, date, liked, reaction, notes, retry })
+    toast.show(retry ? '🔁 Marcado para volver a probar' : '✓ Ya no está pendiente de repetir')
+  }
+
   const save = (input: TrialInput) => {
     if (editingTrial) {
       updateTrial(editingTrial.id, input)
@@ -107,6 +116,32 @@ function FoodDetail({ foodId, editTrialId, startNew }: { foodId: string; editTri
           </span>
         )}
       </div>
+
+      {latest?.retry ? (
+        <div className="rounded-2xl bg-sky-100 p-3 ring-1 ring-sky-300">
+          <p className="text-sm font-bold text-sky-700">
+            🔁 Pendiente de volver a probar (última vez: {formatShort(latest.date, today)}). Al registrar otra prueba
+            sin esta marca, deja de estar pendiente.
+          </p>
+          <button
+            type="button"
+            onClick={() => setRetry(false)}
+            className="mt-2 min-h-10 rounded-xl bg-white px-3 text-sm font-bold text-sky-700 ring-1 ring-sky-300"
+          >
+            ✓ Ya no hace falta repetir
+          </button>
+        </div>
+      ) : (
+        latest && (
+          <button
+            type="button"
+            onClick={() => setRetry(true)}
+            className="min-h-11 self-start rounded-2xl bg-white px-4 text-sm font-bold text-sky-700 ring-1 ring-sky-300"
+          >
+            🔁 Marcar para volver a probar
+          </button>
+        )
+      )}
 
       {planned && (
         <p className="rounded-2xl bg-lilac-100 p-3 text-sm font-bold text-lilac-700">

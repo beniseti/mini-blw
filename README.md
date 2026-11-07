@@ -17,6 +17,7 @@ Los datos se guardan en una **base de datos SQLite en tu propio servidor** (por 
 
 - **Catálogo de ~100 alimentos** en 7 categorías, con emoji, edad mínima orientativa (6, 7–8 o 9+ meses), consejo de preparación para BLW (y otro para cuando ya hace la pinza), alérgenos y si es rico en hierro 🩸.
 - **Plan de comidas**: 1 o 2 alimentos nuevos al día, con los alérgenos solos y separados, respetando su edad. Si un día no se puede, se **aplaza** y el resto del plan se mueve.
+- **Volver a probar** 🔁: marca un alimento como probado pero pendiente de repetir (no le gustó, apenas comió…). Aparece en una lista en el inicio hasta que se lo vuelvas a ofrecer.
 - **Registro de pruebas**: fecha, si le gustó (👍 / 😐 / 👎), reacción (ninguna / leve / preocupante) y notas. Se pueden editar y borrar.
 - **Estado visual** de cada alimento y **barras de progreso** global y por categoría.
 - **Control de alérgenos**: aviso (no bloqueante) si introduces un alérgeno nuevo a menos de 3 días de otro.
@@ -42,6 +43,15 @@ En la pestaña **Plan** (y en la tarjeta «Plan de hoy» del inicio):
 Si un alérgeno del plan coincide con otro introducido hace menos de 3 días (por ejemplo, porque lo diste fuera del plan), el plan te avisa para que lo aplaces.
 
 El orden de los primeros alimentos se puede cambiar en **`src/data/plan.ts`**.
+
+## Volver a probar
+
+Muchos alimentos necesitan varias exposiciones antes de que el bebé los acepte. Para no olvidar repetirlos:
+
+- Al **registrar una prueba**, activa **🔁 Volver a probar**. Se activa solo si eliges 👎 «No le gustó», y puedes desactivarlo.
+- Desde la **ficha de un alimento** ya probado puedes **marcarlo para volver a probar** (o quitar la marca) sin registrar una prueba nueva.
+- El alimento **cuenta como probado** para el progreso y el plan, pero se ve en azul con 🔁. Aparece en la lista **«Para volver a probar»** del inicio y del plan, empezando por el que hace más tiempo que no prueba, con un botón para registrarlo.
+- Cuando registras una prueba nueva **sin** la marca, deja de estar pendiente. En *Alimentos → Filtros → 🔁 Volver a probar* ves todos los pendientes.
 
 ## Cómo funciona
 

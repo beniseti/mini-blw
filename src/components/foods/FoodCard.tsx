@@ -12,14 +12,21 @@ interface Props {
   onOpen: (foodId: string) => void
 }
 
-const STATUS_ICON = { untried: '', tried: '✓', mild: '!', severe: '!' } as const
+const STATUS_ICON = { untried: '', tried: '✓', retry: '🔁', mild: '!', severe: '!' } as const
 const STATUS_ICON_CLASS = {
   untried: '',
   tried: 'bg-mint-300 text-mint-800',
+  retry: 'bg-sky-300 text-sky-700',
   mild: 'bg-amber-300 text-amber-700',
   severe: 'bg-rose-300 text-rose-700',
 } as const
-const STATUS_SR = { untried: 'no probado', tried: 'probado', mild: 'reacción leve', severe: 'reacción preocupante' }
+const STATUS_SR = {
+  untried: 'no probado',
+  tried: 'probado',
+  retry: 'probado, volver a probar',
+  mild: 'reacción leve',
+  severe: 'reacción preocupante',
+}
 
 export const FoodCard = memo(function FoodCard({ food, stats, suitable, onOpen }: Props) {
   const status = visualStatus(stats)
@@ -56,6 +63,9 @@ export const FoodCard = memo(function FoodCard({ food, stats, suitable, onOpen }
       <span className="mt-auto flex flex-wrap items-center justify-center gap-1" aria-hidden="true">
         {hasAllergen && (
           <span className="rounded-full bg-amber-200 px-1.5 text-[0.65rem] font-extrabold text-amber-700">Alérgeno</span>
+        )}
+        {stats?.retry && status !== 'retry' && (
+          <span className="rounded-full bg-sky-200 px-1.5 text-[0.65rem] font-extrabold text-sky-700">🔁 Repetir</span>
         )}
         {food.iron && <span className="text-xs" title="Rico en hierro">🩸</span>}
         {suitable === false && (

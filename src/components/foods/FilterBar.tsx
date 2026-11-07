@@ -14,6 +14,7 @@ const STATUS_CHIPS: { value: Filters['status']; label: string }[] = [
   { value: 'all', label: 'Todos' },
   { value: 'untried', label: '○ No probados' },
   { value: 'tried', label: '✓ Probados' },
+  { value: 'retry', label: '🔁 Volver a probar' },
   { value: 'reaction', label: '⚠️ Con reacción' },
 ]
 

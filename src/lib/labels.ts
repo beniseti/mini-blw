@@ -22,7 +22,7 @@ export const REACTION_LABEL: Record<Reaction, string> = {
 }
 
 /** Clases para el estado visual de cada alimento. */
-export const STATUS_STYLES: Record<FoodStatus | 'mild' | 'severe', { card: string; badge: string }> = {
+export const STATUS_STYLES: Record<FoodStatus | 'retry' | 'mild' | 'severe', { card: string; badge: string }> = {
   untried: {
     card: 'bg-white border-2 border-dashed border-line',
     badge: 'bg-white text-ink-soft ring-1 ring-line',
@@ -34,6 +34,10 @@ export const STATUS_STYLES: Record<FoodStatus | 'mild' | 'severe', { card: strin
   reaction: {
     card: 'bg-amber-100 border-2 border-amber-300',
     badge: 'bg-amber-200 text-amber-700',
+  },
+  retry: {
+    card: 'bg-sky-100 border-2 border-sky-300',
+    badge: 'bg-sky-200 text-sky-700',
   },
   mild: {
     card: 'bg-amber-100 border-2 border-amber-300',

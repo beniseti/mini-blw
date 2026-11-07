@@ -6,6 +6,7 @@ import { daysBetween, formatShort, isValidISODate } from '../lib/dates'
 import { groupPlan, planProgress, sixMonthsDate } from '../lib/plan'
 import { useStore } from '../store/AppStore'
 import { AppHeader } from '../components/layout/AppHeader'
+import { RetryList } from '../components/foods/RetryList'
 import { PlanDayCard } from '../components/plan/PlanDayCard'
 import { ProgressBar } from '../components/progress/ProgressBar'
 import { Button } from '../components/ui/Button'
@@ -163,6 +164,8 @@ export function PlanPage({ onOpenFood, onRegister, onGoTab }: Props) {
                 </Button>
               </div>
             )}
+
+            <RetryList onRegister={onRegister} onOpenFood={onOpenFood} limit={3} />
 
             {shown.map((day) => (
               <PlanDayCard

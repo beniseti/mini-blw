@@ -3,7 +3,8 @@ import type { AllergenId, CategoryId, FoodStatus } from '../types'
 export interface Filters {
   query: string
   category: CategoryId | 'all'
-  status: FoodStatus | 'all'
+  /** 'retry' = marcados para volver a probar. */
+  status: FoodStatus | 'retry' | 'all'
   /** 'any' = solo alérgenos, 'none' = sin alérgenos, o un alérgeno concreto. */
   allergen: AllergenId | 'any' | 'none' | 'all'
   ironOnly: boolean

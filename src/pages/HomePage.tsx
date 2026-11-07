@@ -11,6 +11,7 @@ import { AppHeader } from '../components/layout/AppHeader'
 import { DisclaimerBanner } from '../components/layout/DisclaimerBanner'
 import { CategoryProgress } from '../components/progress/CategoryProgress'
 import { ProgressBar } from '../components/progress/ProgressBar'
+import { RetryList } from '../components/foods/RetryList'
 import { TodayPlanCard } from '../components/plan/TodayPlanCard'
 import { TrialItem } from '../components/trials/TrialItem'
 import { Button } from '../components/ui/Button'
@@ -19,11 +20,12 @@ import { Card } from '../components/ui/Card'
 interface Props {
   onOpenFood: (foodId: string, trialId?: string) => void
   onRegister: (foodId: string) => void
+  onShowRetry: () => void
   onOpenCategory: (category: CategoryId) => void
   onGoTab: (path: string) => void
 }
 
-export function HomePage({ onOpenFood, onRegister, onOpenCategory, onGoTab }: Props) {
+export function HomePage({ onOpenFood, onRegister, onShowRetry, onOpenCategory, onGoTab }: Props) {
   const { data, age, today, stats, allergenIntro } = useStore()
   const profile = data.profile
   const progress = progressFor(FOODS, stats)
@@ -73,6 +75,8 @@ export function HomePage({ onOpenFood, onRegister, onOpenCategory, onGoTab }: Pr
         {(!age || age.months >= 6 || data.plan.items.length > 0) && (
           <TodayPlanCard onRegister={onRegister} onOpenFood={onOpenFood} onGoTab={onGoTab} />
         )}
+
+        <RetryList onRegister={onRegister} onOpenFood={onOpenFood} onSeeAll={onShowRetry} />
 
         <Card title="Progreso">
           <div className="flex items-end justify-between gap-2">

@@ -28,6 +28,9 @@ export function TrialItem({ trial, food, today, onClick }: Props) {
             </span>
           )}
           {!food && <span className="text-sm font-semibold text-ink-soft">{LIKED_LABEL[trial.liked]}</span>}
+          {trial.retry && (
+            <span className="rounded-full bg-sky-200 px-2 py-0.5 text-xs font-bold text-sky-700">🔁 Volver a probar</span>
+          )}
           {trial.reaction !== 'none' && (
             <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${reactionClass}`}>
               ⚠️ {REACTION_LABEL[trial.reaction]}

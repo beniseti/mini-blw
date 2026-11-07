@@ -5,11 +5,11 @@ import type { Liked, Profile, Reaction, Trial } from '../src/types.ts'
  * Datos de ejemplo para probar la app. Las fechas se calculan respecto al día de hoy
  * para que el bebé tenga ~7 meses y las pruebas parezcan recientes.
  */
-const DEMO_TRIALS: [daysAgo: number, foodId: string, liked: Liked, reaction: Reaction, notes: string][] = [
+const DEMO_TRIALS: [daysAgo: number, foodId: string, liked: Liked, reaction: Reaction, notes: string, retry?: boolean][] = [
   [38, 'brocoli', 'like', 'none', 'Lo chupó mucho, primera comida BLW'],
   [37, 'platano', 'like', 'none', ''],
   [35, 'calabaza', 'neutral', 'none', 'Asada en gajos'],
-  [33, 'aguacate', 'dislike', 'none', 'Muchas arcadas, es normal al principio'],
+  [33, 'aguacate', 'dislike', 'none', 'Muchas arcadas, es normal al principio', true],
   [30, 'merluza', 'like', 'none', 'Primera vez pescado, sin espinas'],
   [27, 'boniato', 'like', 'none', ''],
   [24, 'pan', 'like', 'none', 'Tiras tostadas con aceite'],
@@ -19,7 +19,7 @@ const DEMO_TRIALS: [daysAgo: number, foodId: string, liked: Liked, reaction: Rea
   [12, 'lentejas', 'neutral', 'none', 'En hamburguesitas'],
   [9, 'calabacin', 'like', 'none', ''],
   [8, 'platano', 'like', 'none', 'Rebozado en avena para que no resbale'],
-  [6, 'zanahoria', 'neutral', 'none', 'Bastones al vapor'],
+  [6, 'zanahoria', 'neutral', 'none', 'Bastones al vapor; casi no comió', true],
   [4, 'pollo', 'like', 'none', 'Muslo desmigado'],
   [2, 'brocoli', 'like', 'none', ''],
   [1, 'huevo', 'like', 'none', 'Tortilla francesa en tiras'],
@@ -34,7 +34,7 @@ function monthsAgo(today: string, months: number, extraDays: number): string {
 export function buildDemoData(today: string = toISODate()): { profile: Profile; trials: Trial[] } {
   return {
     profile: { name: 'Lucía (demo)', birthDate: monthsAgo(today, 7, 5) },
-    trials: DEMO_TRIALS.map(([daysAgo, foodId, liked, reaction, notes], i) => {
+    trials: DEMO_TRIALS.map(([daysAgo, foodId, liked, reaction, notes, retry = false], i) => {
       const date = addDays(today, -daysAgo)
       return {
         id: `demo-${String(i + 1).padStart(2, '0')}`,
@@ -43,6 +43,7 @@ export function buildDemoData(today: string = toISODate()): { profile: Profile; 
         liked,
         reaction,
         notes,
+        retry,
         createdAt: `${date}T${String(10 + (i % 8)).padStart(2, '0')}:00:00.000Z`,
       }
     }),
