@@ -105,7 +105,7 @@ Para probar la sincronización, abre la app en dos navegadores (o en el PC y en 
 
 ### Opción B: con Node.js (para modificar el código)
 
-Necesitas **Node.js 22.18 o superior** (o Node 24).
+Necesitas **Node.js 22.13 o superior** (recomendado: la versión LTS de https://nodejs.org).
 
 ```bash
 npm install

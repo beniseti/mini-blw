@@ -36,6 +36,6 @@
   },
   "description": "PWA para el seguimiento de la alimentación complementaria con BLW",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22.13"
   }
 }

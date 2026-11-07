@@ -7,13 +7,17 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const [major, minor] = process.versions.node.split('.').map(Number)
-if (major < 22 || (major === 22 && minor < 18)) {
+const atLeast = (maj, min) => major > maj || (major === maj && minor >= min)
+// SQLite integrado (node:sqlite) necesita Node 22.13+.
+if (!atLeast(22, 13)) {
   console.error(`
-❌ Necesitas Node.js 22.18 o superior y tienes ${process.version}.
+❌ Necesitas Node.js 22.13 o superior y tienes ${process.version}.
    Descarga la versión LTS en https://nodejs.org, instálala y vuelve a abrir la terminal.
 `)
   process.exit(1)
 }
+// Node 22.18+ ejecuta TypeScript directamente; entre 22.13 y 22.17 hay que activarlo con un flag.
+const tsFlags = atLeast(22, 18) ? [] : ['--experimental-strip-types']
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 console.log(`\n🥑 Bocaditos BLW v${version} (desarrollo) · Node ${process.version}\n`)
@@ -22,7 +26,7 @@ const viteBin = fileURLToPath(new URL('../node_modules/vite/bin/vite.js', import
 const apiPort = process.env.API_PORT || '8787'
 
 const children = [
-  spawn(process.execPath, ['--watch', '--disable-warning=ExperimentalWarning', 'server/index.ts'], {
+  spawn(process.execPath, ['--watch', '--disable-warning=ExperimentalWarning', ...tsFlags, 'server/index.ts'], {
     stdio: 'inherit',
     env: {
       ...process.env,
