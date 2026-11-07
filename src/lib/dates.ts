@@ -83,3 +83,8 @@ export function formatRelative(iso: string, today: string = toISODate()): string
   if (diff > 1) return `hace ${diff} días`
   return `dentro de ${-diff} días`
 }
+
+/** "sábado, 7 de noviembre" (sin año). */
+export function formatWeekday(iso: string): string {
+  return longFmt.format(asUTCDate(iso))
+}

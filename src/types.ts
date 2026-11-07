@@ -60,12 +60,53 @@ export interface Profile {
   birthDate: string
 }
 
+/** Un alimento nuevo planificado para un día concreto. */
+export interface PlanItem {
+  id: string
+  foodId: string
+  /** YYYY-MM-DD */
+  date: string
+}
+
+/** Plan de comidas: alimentos nuevos a introducir, 1 o 2 por día. */
+export interface MealPlan {
+  perDay: 1 | 2
+  items: PlanItem[]
+}
+
 export interface AppData {
   version: 1
   profile: Profile | null
   trials: Trial[]
   /** Última vez que se exportó una copia de seguridad (ISO). */
   lastExportAt: string | null
+  plan: MealPlan
 }
 
 export type FoodStatus = 'untried' | 'tried' | 'reaction'
+
+/**
+ * Operación de cambio que el cliente envía al servidor (cola de sincronización).
+ * Cada una lleva un `opId` único para que reenviarla no la aplique dos veces.
+ */
+export type SyncOp =
+  | { opId: string; type: 'upsertTrial'; trial: Trial }
+  | { opId: string; type: 'deleteTrial'; id: string }
+  | { opId: string; type: 'setProfile'; profile: Profile | null }
+  /** Solo fija el perfil si el servidor aún no tiene uno (migración de datos antiguos). */
+  | { opId: string; type: 'mergeProfile'; profile: Profile }
+  /** Importar copia: sustituye perfil y pruebas (y el plan, si la copia lo incluye). */
+  | { opId: string; type: 'replaceAll'; profile: Profile | null; trials: Trial[]; plan?: MealPlan }
+  | { opId: string; type: 'clearAll' }
+  | { opId: string; type: 'markExported'; at: string }
+  /** Crear o rehacer el plan de comidas (sustituye el anterior). */
+  | { opId: string; type: 'replacePlan'; plan: MealPlan }
+  /** Cambiar de fecha alimentos del plan (aplazar). */
+  | { opId: string; type: 'movePlanItems'; moves: { id: string; date: string }[] }
+  | { opId: string; type: 'deletePlanItem'; id: string }
+
+export interface SyncResponse {
+  data: AppData
+  applied: number
+  rejected: number
+}

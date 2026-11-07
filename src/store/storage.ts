@@ -1,47 +1,15 @@
-import { isValidISODate } from '../lib/dates'
 import { newId } from '../lib/text'
-import type { AppData, Liked, Profile, Reaction, Trial } from '../types'
+import { emptyPlan, isObject, parseOp, parsePlan, parseProfile, parseTrials } from '../shared/validate'
+import type { AppData, SyncOp } from '../types'
 
-export const STORAGE_KEY = 'bocaditos-blw:v1'
+/** Copia local (caché) de los datos del servidor + cola de cambios pendientes. */
+export const CACHE_KEY = 'bocaditos-blw:cache:v2'
+/** Clave de la versión anterior (solo localStorage, sin servidor). */
+export const LEGACY_KEY = 'bocaditos-blw:v1'
 export const BACKUP_APP_ID = 'bocaditos-blw'
 
 export function emptyData(): AppData {
-  return { version: 1, profile: null, trials: [], lastExportAt: null }
-}
-
-const LIKED: Liked[] = ['like', 'neutral', 'dislike']
-const REACTIONS: Reaction[] = ['none', 'mild', 'severe']
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
-
-function parseProfile(raw: unknown): Profile | null {
-  if (!isObject(raw)) return null
-  const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 60) : ''
-  const birthDate = isValidISODate(raw.birthDate) ? raw.birthDate : ''
-  if (!name && !birthDate) return null
-  return { name, birthDate }
-}
-
-function parseTrial(raw: unknown): Trial | null {
-  if (!isObject(raw)) return null
-  if (typeof raw.foodId !== 'string' || !raw.foodId) return null
-  if (!isValidISODate(raw.date)) return null
-  if (!LIKED.includes(raw.liked as Liked)) return null
-  if (!REACTIONS.includes(raw.reaction as Reaction)) return null
-  return {
-    id: typeof raw.id === 'string' && raw.id ? raw.id : newId(),
-    foodId: raw.foodId,
-    date: raw.date,
-    liked: raw.liked as Liked,
-    reaction: raw.reaction as Reaction,
-    notes: typeof raw.notes === 'string' ? raw.notes.slice(0, 2000) : '',
-    createdAt:
-      typeof raw.createdAt === 'string' && !Number.isNaN(Date.parse(raw.createdAt))
-        ? raw.createdAt
-        : `${raw.date}T12:00:00.000Z`,
-  }
+  return { version: 1, profile: null, trials: [], lastExportAt: null, plan: emptyPlan() }
 }
 
 export type ParseResult =
@@ -63,20 +31,7 @@ export function parseAppData(raw: unknown): ParseResult {
   }
   if (!Array.isArray(raw.trials)) return { ok: false, error: 'Faltan las pruebas en el archivo.' }
 
-  const seen = new Set<string>()
-  const trials: Trial[] = []
-  let skipped = 0
-  for (const item of raw.trials) {
-    const t = parseTrial(item)
-    if (!t) {
-      skipped++
-      continue
-    }
-    if (seen.has(t.id)) t.id = newId()
-    seen.add(t.id)
-    trials.push(t)
-  }
-
+  const { trials, skipped } = parseTrials(raw.trials)
   return {
     ok: true,
     skipped,
@@ -85,37 +40,69 @@ export function parseAppData(raw: unknown): ParseResult {
       profile: parseProfile(raw.profile),
       trials,
       lastExportAt: typeof raw.lastExportAt === 'string' ? raw.lastExportAt : null,
+      // Las copias anteriores al plan de comidas no lo incluyen.
+      plan: parsePlan(raw.plan) ?? emptyPlan(),
     },
   }
 }
 
-export function loadData(): AppData {
-  let text: string | null = null
-  try {
-    text = localStorage.getItem(STORAGE_KEY)
-  } catch {
-    return emptyData()
-  }
-  if (!text) return emptyData()
-  try {
-    const result = parseAppData(JSON.parse(text))
-    if (result.ok) return result.data
-  } catch {
-    // JSON corrupto: se trata igual que datos inválidos
-  }
-  // No perdemos nada: guardamos una copia del contenido ilegible antes de empezar de cero.
-  try {
-    localStorage.setItem(`${STORAGE_KEY}:corrupt:${Date.now()}`, text)
-  } catch {
-    // sin espacio: no hay más que hacer
-  }
-  return emptyData()
+export interface LocalState {
+  /** Últimos datos conocidos (servidor + cambios pendientes ya aplicados). */
+  data: AppData
+  /** Cambios aún no confirmados por el servidor, en orden. */
+  outbox: SyncOp[]
+  /** Última sincronización correcta (ISO) o null si nunca. */
+  lastSyncAt: string | null
 }
 
-/** Guarda los datos. Devuelve `false` si el navegador no lo permite (modo privado, sin espacio…). */
-export function saveData(data: AppData): boolean {
+function readJSON(key: string): unknown {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    const text = localStorage.getItem(key)
+    return text ? JSON.parse(text) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Carga la caché local. Si solo existen datos de la versión anterior (sin servidor),
+ * los convierte en operaciones pendientes para subirlos al servidor sin perder nada.
+ */
+export function loadLocal(): LocalState {
+  const cached = readJSON(CACHE_KEY)
+  if (isObject(cached)) {
+    const parsed = parseAppData(cached.data)
+    const outbox = Array.isArray(cached.outbox)
+      ? cached.outbox.map(parseOp).filter((op): op is SyncOp => op !== null)
+      : []
+    return {
+      data: parsed.ok ? parsed.data : emptyData(),
+      outbox,
+      lastSyncAt: typeof cached.lastSyncAt === 'string' ? cached.lastSyncAt : null,
+    }
+  }
+
+  const legacy = parseAppData(readJSON(LEGACY_KEY))
+  if (legacy.ok && (legacy.data.trials.length > 0 || legacy.data.profile)) {
+    const outbox: SyncOp[] = legacy.data.trials.map((trial) => ({ opId: newId(), type: 'upsertTrial', trial }))
+    if (legacy.data.profile) outbox.push({ opId: newId(), type: 'mergeProfile', profile: legacy.data.profile })
+    try {
+      // Conservamos una copia por seguridad y retiramos la clave antigua para no migrar dos veces.
+      localStorage.setItem(`${LEGACY_KEY}:migrado`, localStorage.getItem(LEGACY_KEY) ?? '')
+      localStorage.removeItem(LEGACY_KEY)
+    } catch {
+      // sin acceso a localStorage: se intentará en el próximo arranque
+    }
+    return { data: legacy.data, outbox, lastSyncAt: null }
+  }
+
+  return { data: emptyData(), outbox: [], lastSyncAt: null }
+}
+
+/** Guarda la caché local. Devuelve `false` si el navegador no lo permite. */
+export function saveLocal(state: LocalState): boolean {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(state))
     return true
   } catch {
     return false
@@ -131,6 +118,7 @@ export function buildBackup(data: AppData, now: Date = new Date()): string {
       version: data.version,
       profile: data.profile,
       trials: data.trials,
+      plan: data.plan,
     },
     null,
     2,

@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { formatAge, getAge } from '../lib/age'
 import { formatRelative, isValidISODate, toISODate } from '../lib/dates'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
-import { useStore } from '../store/AppStore'
+import { useStore, type SyncStatus } from '../store/AppStore'
 import { buildBackup, parseAppData } from '../store/storage'
 import type { AppData } from '../types'
 import { AppHeader } from '../components/layout/AppHeader'
@@ -12,16 +12,32 @@ import { Card } from '../components/ui/Card'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { useToast } from '../components/ui/Toast'
 
+const SYNC_TEXT: Record<SyncStatus, string> = {
+  synced: '☁️ Guardado',
+  syncing: '🔄 Sincronizando…',
+  pending: '⏳ Pendiente',
+  offline: '📴 Sin conexión',
+  error: '⚠️ Error',
+}
+
+const timeFmt = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+function formatTime(iso: string): string {
+  return timeFmt.format(new Date(iso)).replace('.', '')
+}
+
 const inputClass =
   'h-12 w-full rounded-2xl bg-white px-4 font-semibold text-ink ring-1 ring-line placeholder:text-ink-soft/70 focus:ring-2 focus:ring-lilac-300 focus:outline-none'
 
 export function ProfilePage() {
-  const { data, today, setProfile, replaceAll, clearAll, markExported, storageOk } = useStore()
+  const { data, today, sync, syncNow, setProfile, replaceAll, clearAll, markExported } = useStore()
   const toast = useToast()
   const { canInstall, installed, install } = useInstallPrompt()
 
-  const [name, setName] = useState(data.profile?.name ?? '')
-  const [birthDate, setBirthDate] = useState(data.profile?.birthDate ?? '')
+  // Borrador del formulario: null = mostrar el perfil guardado (que puede llegar del servidor más tarde).
+  const [draft, setDraft] = useState<{ name: string; birthDate: string } | null>(null)
+  const name = draft?.name ?? data.profile?.name ?? ''
+  const birthDate = draft?.birthDate ?? data.profile?.birthDate ?? ''
+  const edit = (changes: Partial<{ name: string; birthDate: string }>) => setDraft({ name, birthDate, ...changes })
   const [pendingImport, setPendingImport] = useState<{ data: AppData; skipped: number; fileName: string } | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -35,6 +51,7 @@ export function ProfilePage() {
     if (!birthValid) return
     const trimmed = name.trim()
     setProfile(trimmed || birthDate ? { name: trimmed, birthDate } : null)
+    setDraft(null)
     toast.show('✓ Perfil guardado')
   }
 
@@ -71,16 +88,14 @@ export function ProfilePage() {
   const doImport = () => {
     if (!pendingImport) return
     replaceAll(pendingImport.data)
-    setName(pendingImport.data.profile?.name ?? '')
-    setBirthDate(pendingImport.data.profile?.birthDate ?? '')
+    setDraft(null)
     toast.show(`✓ ${pendingImport.data.trials.length} pruebas importadas`)
     setPendingImport(null)
   }
 
   const doClear = () => {
     clearAll()
-    setName('')
-    setBirthDate('')
+    setDraft(null)
     setConfirmClear(false)
     toast.show('Datos borrados')
   }
@@ -89,19 +104,13 @@ export function ProfilePage() {
     <>
       <AppHeader title="Perfil" subtitle="Tu bebé y tus datos" />
       <div className="mx-auto flex max-w-lg flex-col gap-4 px-4 pb-6">
-        {!storageOk && (
-          <p role="alert" className="rounded-2xl bg-rose-100 p-3 text-sm font-bold text-rose-700">
-            ⚠️ El navegador no permite guardar datos (¿modo privado o sin espacio?). Los cambios se perderán al cerrar.
-          </p>
-        )}
-
         <Card title="👶 Tu bebé" className="bg-lilac-100">
           <form onSubmit={saveProfile} className="flex flex-col gap-4">
             <label className="flex flex-col gap-2">
               <span className="text-sm font-bold text-ink-soft">Nombre</span>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => edit({ name: e.target.value })}
                 maxLength={60}
                 autoComplete="off"
                 placeholder="Ej.: Lucía"
@@ -114,7 +123,7 @@ export function ProfilePage() {
                 type="date"
                 value={birthDate}
                 max={today}
-                onChange={(e) => setBirthDate(e.target.value)}
+                onChange={(e) => edit({ birthDate: e.target.value })}
                 className={inputClass}
               />
               {!birthValid && <span className="text-sm font-bold text-rose-700">Introduce una fecha válida (no futura).</span>}
@@ -130,10 +139,35 @@ export function ProfilePage() {
           </form>
         </Card>
 
+        <Card title="🗄️ Base de datos">
+          <p className="text-sm font-semibold text-ink-soft">
+            Los datos se guardan en el servidor (base de datos SQLite) y se comparten entre todos los dispositivos que
+            abran la app. Sin conexión puedes seguir registrando: los cambios se envían solos al reconectar.
+          </p>
+          <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-2xl bg-cream p-3">
+              <dt className="font-bold text-ink-soft">Estado</dt>
+              <dd className="font-extrabold text-ink">{SYNC_TEXT[sync.status]}</dd>
+            </div>
+            <div className="rounded-2xl bg-cream p-3">
+              <dt className="font-bold text-ink-soft">Última sincronización</dt>
+              <dd className="font-extrabold text-ink">{sync.lastSyncAt ? formatTime(sync.lastSyncAt) : 'Nunca'}</dd>
+            </div>
+          </dl>
+          {sync.pending > 0 && (
+            <p className="mt-2 text-sm font-bold text-amber-700">
+              ⏳ {sync.pending} {sync.pending === 1 ? 'cambio pendiente' : 'cambios pendientes'} de enviar.
+            </p>
+          )}
+          {sync.status === 'error' && sync.error && <p className="mt-2 text-sm font-bold text-rose-700">⚠️ {sync.error}</p>}
+          <Button variant="secondary" className="mt-3" block icon="🔄" onClick={syncNow}>
+            Sincronizar ahora
+          </Button>
+        </Card>
+
         <Card title="💾 Copia de seguridad">
           <p className="text-sm font-semibold text-ink-soft">
-            Los datos se guardan solo en este dispositivo. Descarga una copia de vez en cuando para no perderlos si
-            cambias de móvil o borras los datos del navegador.
+            Descarga una copia de los datos en un archivo JSON de vez en cuando, por si le pasa algo al servidor.
           </p>
           <p className="mt-2 text-sm font-bold text-ink">
             {data.trials.length} pruebas ·{' '}
@@ -174,7 +208,8 @@ export function ProfilePage() {
 
         <Card title="🗑️ Borrar datos" className="bg-rose-100">
           <p className="text-sm font-semibold text-ink-soft">
-            Elimina el perfil y todas las pruebas de este dispositivo. Exporta antes una copia si quieres conservarlas.
+            Elimina el perfil y todas las pruebas del servidor (en todos los dispositivos). Exporta antes una copia si
+            quieres conservarlas.
           </p>
           <Button variant="danger" className="mt-3" block onClick={() => setConfirmClear(true)}>
             Borrar todo
@@ -202,7 +237,7 @@ export function ProfilePage() {
         {pendingImport && (
           <>
             <p>
-              Se reemplazarán tus <strong>{data.trials.length}</strong> pruebas actuales por las{' '}
+              Se reemplazarán las <strong>{data.trials.length}</strong> pruebas actuales (en todos los dispositivos) por las{' '}
               <strong>{pendingImport.data.trials.length}</strong> del archivo «{pendingImport.fileName}»
               {pendingImport.data.profile?.name ? ` (perfil: ${pendingImport.data.profile.name})` : ''}.
             </p>
@@ -223,7 +258,8 @@ export function ProfilePage() {
         onConfirm={doClear}
         onCancel={() => setConfirmClear(false)}
       >
-        Se eliminarán el perfil y las <strong>{data.trials.length}</strong> pruebas. Esta acción no se puede deshacer.
+        Se eliminarán del servidor el perfil y las <strong>{data.trials.length}</strong> pruebas, en todos los
+        dispositivos. Esta acción no se puede deshacer.
       </ConfirmDialog>
     </>
   )

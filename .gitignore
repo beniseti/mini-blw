@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Servidor compilado y base de datos local de desarrollo
+dist-server
+data

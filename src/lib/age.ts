@@ -9,7 +9,7 @@ export interface BabyAge {
 }
 
 /** Suma meses a una fecha, ajustando al último día si el mes es más corto (31 ene + 1 → 28/29 feb). */
-function addMonthsClamped(iso: string, add: number): string {
+export function addMonthsClamped(iso: string, add: number): string {
   const [y, m, d] = iso.split('-').map(Number)
   const total = y * 12 + (m - 1) + add
   const ny = Math.floor(total / 12)

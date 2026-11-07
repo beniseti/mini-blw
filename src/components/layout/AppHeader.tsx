@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { SyncBadge } from './SyncBadge'
 
 export function AppHeader({ title, subtitle, right }: { title: string; subtitle?: ReactNode; right?: ReactNode }) {
   return (
@@ -8,7 +9,7 @@ export function AppHeader({ title, subtitle, right }: { title: string; subtitle?
           <h1 className="truncate text-2xl font-black text-ink">{title}</h1>
           {subtitle && <p className="truncate text-sm font-semibold text-ink-soft">{subtitle}</p>}
         </div>
-        {right}
+        {right ?? <SyncBadge />}
       </div>
     </header>
   )

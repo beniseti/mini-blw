@@ -5,6 +5,16 @@ services:
     container_name: bocaditos-blw
     ports:
       - "${PORT:-8080}:8080"
+    environment:
+      # Datos de ejemplo: se insertan SOLO al crear la base de datos por primera vez.
+      #   - Para probar en tu PC: "true"
+      #   - En el NAS (uso real):  "false"
+      SEED_DEMO_DATA: "true"
+      TZ: Europe/Madrid
+    volumes:
+      # La base de datos SQLite (bocaditos.db) se guarda aquí y sobrevive a
+      # reinicios y actualizaciones del contenedor.
+      - bocaditos_data:/data
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -31,5 +41,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  bocaditos_data:
   caddy_data:
   caddy_config:

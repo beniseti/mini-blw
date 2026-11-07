@@ -3,8 +3,14 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Puerto del servidor API en desarrollo (npm run dev arranca ambos).
+const API_PORT = process.env.API_PORT || '8787'
+const apiProxy = { '/api': `http://localhost:${API_PORT}` }
+
 // https://vite.dev/config/
 export default defineConfig({
+  server: { proxy: apiProxy },
+  preview: { proxy: apiProxy },
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '1.0.0'),
   },
@@ -40,6 +46,8 @@ export default defineConfig({
         // Solo precacheamos los subconjuntos latinos de la fuente (español).
         globIgnores: ['**/*cyrillic*', '**/*vietnamese*'],
         navigateFallback: 'index.html',
+        // La API nunca la sirve el service worker: siempre va al servidor.
+        navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
       },
     }),

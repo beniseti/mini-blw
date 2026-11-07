@@ -6,6 +6,7 @@ export interface Tab {
 
 export const TABS: Tab[] = [
   { path: '/', label: 'Inicio', emoji: '🏠' },
+  { path: '/plan', label: 'Plan', emoji: '📋' },
   { path: '/alimentos', label: 'Alimentos', emoji: '🥕' },
   { path: '/historial', label: 'Historial', emoji: '📅' },
   { path: '/evitar', label: 'Evitar', emoji: '🚫' },

@@ -1,5 +1,7 @@
 node_modules
 dist
+dist-server
+data
 dev-dist
 coverage
 .git
@@ -12,5 +14,5 @@ coverage
 Dockerfile
 docker-compose.yml
 deploy
-README.md
 docs
+README.md

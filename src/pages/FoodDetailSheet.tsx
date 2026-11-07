@@ -18,19 +18,28 @@ interface Props {
   foodId: string | null
   /** Id de una prueba a editar al abrir (desde el historial). */
   editTrialId?: string | null
+  /** Abrir con el formulario de nueva prueba desplegado. */
+  startNew?: boolean
   onClose: () => void
 }
 
-export function FoodDetailSheet({ foodId, editTrialId, onClose }: Props) {
+export function FoodDetailSheet({ foodId, editTrialId, startNew, onClose }: Props) {
   const food = foodId ? FOOD_BY_ID.get(foodId) : undefined
   return (
     <BottomSheet open={!!food} title={food?.name ?? 'Alimento'} onClose={onClose}>
-      {food && <FoodDetail key={`${food.id}-${editTrialId ?? ''}`} foodId={food.id} editTrialId={editTrialId ?? null} />}
+      {food && (
+        <FoodDetail
+          key={`${food.id}-${editTrialId ?? ''}-${startNew ? 'n' : ''}`}
+          foodId={food.id}
+          editTrialId={editTrialId ?? null}
+          startNew={!!startNew}
+        />
+      )}
     </BottomSheet>
   )
 }
 
-function FoodDetail({ foodId, editTrialId }: { foodId: string; editTrialId: string | null }) {
+function FoodDetail({ foodId, editTrialId, startNew }: { foodId: string; editTrialId: string | null; startNew: boolean }) {
   const food = FOOD_BY_ID.get(foodId)!
   const { data, stats, age, today, allergenIntro, addTrial, updateTrial, deleteTrial } = useStore()
   const toast = useToast()
@@ -41,7 +50,7 @@ function FoodDetail({ foodId, editTrialId }: { foodId: string; editTrialId: stri
   )
   // 'new' = formulario de nueva prueba; id = editando esa prueba; null = solo ficha
   const [editing, setEditing] = useState<string | null>(() =>
-    editTrialId && foodTrials.some((t) => t.id === editTrialId) ? editTrialId : null,
+    editTrialId && foodTrials.some((t) => t.id === editTrialId) ? editTrialId : startNew ? 'new' : null,
   )
   const [toDelete, setToDelete] = useState<string | null>(null)
   const formRef = useRef<HTMLDivElement>(null)
@@ -53,6 +62,7 @@ function FoodDetail({ foodId, editTrialId }: { foodId: string; editTrialId: stri
   const suitable = isSuitable(food.minAge, age?.months ?? null)
   const editingTrial = editing && editing !== 'new' ? foodTrials.find((t) => t.id === editing) : undefined
   const allergens = food.allergens ?? []
+  const planned = !stats.has(food.id) ? data.plan.items.find((i) => i.foodId === food.id) : undefined
 
   const save = (input: TrialInput) => {
     if (editingTrial) {
@@ -97,6 +107,13 @@ function FoodDetail({ foodId, editTrialId }: { foodId: string; editTrialId: stri
           </span>
         )}
       </div>
+
+      {planned && (
+        <p className="rounded-2xl bg-lilac-100 p-3 text-sm font-bold text-lilac-700">
+          📋 En el plan de comidas para {planned.date === today ? 'hoy' : `el ${formatShort(planned.date, today)}`}
+          {planned.date < today ? ' (atrasado)' : ''}
+        </p>
+      )}
 
       {suitable === false && age && (
         <p className="rounded-2xl bg-butter-100 p-3 text-sm font-semibold text-butter-700">
