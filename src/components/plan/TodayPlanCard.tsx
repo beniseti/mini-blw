@@ -17,7 +17,7 @@ interface Props {
 
 /** Resumen del plan de comidas para la pantalla de inicio: lo que toca hoy. */
 export function TodayPlanCard({ onRegister, onOpenFood, onGoTab, onOptions }: Props) {
-  const { data, today, postponePlanDay, catchUpPlan } = useStore()
+  const { data, today, postponePlanDay, catchUpPlan, removePlanItem } = useStore()
   const toast = useToast()
   const isDone = useMemo(() => planItemDoneChecker(data.trials), [data.trials])
   const days = useMemo(() => groupPlan(data.plan, FOOD_BY_ID, isDone), [data.plan, isDone])
@@ -85,6 +85,10 @@ export function TodayPlanCard({ onRegister, onOpenFood, onGoTab, onOptions }: Pr
             onRegister={onRegister}
             onOpenFood={onOpenFood}
             onOptions={onOptions}
+            onRemove={(id) => {
+              removePlanItem(id)
+              toast.show('🗑️ Quitado del plan')
+            }}
             onPostpone={(date) => {
               if (postponePlanDay(date) > 0) toast.show('⏭️ Aplazado a mañana (y el resto del plan, un día)')
             }}

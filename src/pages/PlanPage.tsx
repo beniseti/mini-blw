@@ -30,7 +30,7 @@ const PER_DAY_OPTIONS = [
 ]
 
 export function PlanPage({ onOpenFood, onRegister, onGoTab, onOptions }: Props) {
-  const { data, today, stats, createPlan, postponePlanDay, catchUpPlan, clearPlan } = useStore()
+  const { data, today, stats, createPlan, postponePlanDay, catchUpPlan, clearPlan, removePlanItem } = useStore()
   const toast = useToast()
 
   const birthDate = data.profile?.birthDate || null
@@ -181,6 +181,10 @@ export function PlanPage({ onOpenFood, onRegister, onGoTab, onOptions }: Props) 
                 onOpenFood={onOpenFood}
                 onPostpone={postpone}
                 onOptions={onOptions}
+                onRemove={(id) => {
+                  removePlanItem(id)
+                  toast.show('🗑️ Quitado del plan')
+                }}
               />
             ))}
 
