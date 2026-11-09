@@ -38,7 +38,8 @@ En la pestaña **Plan** (y en la tarjeta «Plan de hoy» del inicio):
 2. **Registra** cada alimento desde el plan: se abre la ficha con el formulario listo. Cualquier prueba de ese alimento, hecha desde donde sea, lo marca como hecho.
 3. **¿Hoy no se puede?** Pulsa **«Hoy no puedo: aplazar a mañana»**. Los alimentos pendientes de ese día pasan al siguiente y **todo el plan se mueve un día**, así se mantiene la separación entre alérgenos. También puedes aplazar un día futuro.
 4. **¿Te has saltado varios días?** Aparece un aviso con **«Empezar lo pendiente hoy»**, que mueve todo lo pendiente para que continúe desde hoy.
-5. Puedes **quitar** un alimento del plan (✕), **rehacerlo** desde hoy (por ejemplo, para pasar de 2 a 1 al día) o **borrarlo**. Las pruebas registradas nunca se borran.
+5. **¿Prefieres otro alimento ese día?** Pulsa **🔄** junto al alimento y elige otro del plan, con buscador. **Se intercambian los días**: el elegido pasa a ese día y el actual se mueve al día del elegido. Solo se ofrecen los cambios que mantienen las reglas: los alérgenos nuevos siguen solos y separados 3 días, y cada alimento queda en un día en el que el bebé ya tiene la edad.
+6. Desde el mismo botón 🔄 puedes **quitar** un alimento del plan. También puedes **rehacer** el plan desde hoy (por ejemplo, para pasar de 2 a 1 al día) o **borrarlo**. Las pruebas registradas nunca se borran.
 
 Si un alérgeno del plan coincide con otro introducido hace menos de 3 días (por ejemplo, porque lo diste fuera del plan), el plan te avisa para que lo aplaces.
 

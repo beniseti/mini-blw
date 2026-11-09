@@ -20,6 +20,8 @@ interface Props {
   onOpenFood: (foodId: string) => void
   onRegister: (foodId: string) => void
   onGoTab: (path: string) => void
+  /** Opciones de un alimento del plan (cambiar por otro o quitar). */
+  onOptions: (itemId: string) => void
 }
 
 const PER_DAY_OPTIONS = [
@@ -27,8 +29,8 @@ const PER_DAY_OPTIONS = [
   { value: '2' as const, label: '2 al día', emoji: '🥄🥄' },
 ]
 
-export function PlanPage({ onOpenFood, onRegister, onGoTab }: Props) {
-  const { data, today, stats, createPlan, postponePlanDay, catchUpPlan, removePlanItem, clearPlan } = useStore()
+export function PlanPage({ onOpenFood, onRegister, onGoTab, onOptions }: Props) {
+  const { data, today, stats, createPlan, postponePlanDay, catchUpPlan, clearPlan } = useStore()
   const toast = useToast()
 
   const birthDate = data.profile?.birthDate || null
@@ -40,7 +42,6 @@ export function PlanPage({ onOpenFood, onRegister, onGoTab }: Props) {
   const startDate = startInput ?? minStart
   const [visible, setVisible] = useState(PLAN_DAYS_VISIBLE)
   const [confirm, setConfirm] = useState<'redo' | 'clear' | null>(null)
-  const [toRemove, setToRemove] = useState<string | null>(null)
 
   const isDone = useMemo(() => planItemDoneChecker(data.trials), [data.trials])
   const days = useMemo(() => groupPlan(data.plan, FOOD_BY_ID, isDone), [data.plan, isDone])
@@ -179,7 +180,7 @@ export function PlanPage({ onOpenFood, onRegister, onGoTab }: Props) {
                 onRegister={onRegister}
                 onOpenFood={onOpenFood}
                 onPostpone={postpone}
-                onRemove={setToRemove}
+                onOptions={onOptions}
               />
             ))}
 
@@ -237,20 +238,6 @@ export function PlanPage({ onOpenFood, onRegister, onGoTab }: Props) {
         onCancel={() => setConfirm(null)}
       >
         Las pruebas registradas no se borran, solo la planificación.
-      </ConfirmDialog>
-
-      <ConfirmDialog
-        open={!!toRemove}
-        title="¿Quitar del plan?"
-        confirmLabel="Sí, quitar"
-        onConfirm={() => {
-          if (toRemove) removePlanItem(toRemove)
-          setToRemove(null)
-          toast.show('Quitado del plan')
-        }}
-        onCancel={() => setToRemove(null)}
-      >
-        El alimento no se volverá a proponer hasta que rehagas el plan.
       </ConfirmDialog>
     </>
   )

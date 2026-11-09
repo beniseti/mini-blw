@@ -264,3 +264,93 @@ export function retryPlanChange(opts: RetryPlanOptions): { remove: string[]; add
     add: { id: opts.newId(), foodId: opts.foodId, date, retryOf: latest.id },
   }
 }
+
+/**
+ * Qué alimentos del plan introducen un alérgeno nuevo (el primero, por fecha, de cada
+ * alérgeno que aún no se ha introducido con pruebas reales) y en qué fecha.
+ */
+function plannedIntroductions(items: PlanItem[], isDone: PlanItemDone, foodsById: Map<string, Food>, actual: Map<AllergenId, string>) {
+  const intro = new Map(actual)
+  const introItem = new Map<string, AllergenId[]>()
+  const pending = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => !item.retryOf && !isDone(item))
+    .sort((a, b) => (a.item.date !== b.item.date ? (a.item.date < b.item.date ? -1 : 1) : a.index - b.index))
+  for (const { item } of pending) {
+    for (const a of foodsById.get(item.foodId)?.allergens ?? []) {
+      if (!intro.has(a)) {
+        intro.set(a, item.date)
+        introItem.set(item.id, [...(introItem.get(item.id) ?? []), a])
+      }
+    }
+  }
+  return { intro, introItem }
+}
+
+export interface SwapOption {
+  item: PlanItem
+  food: Food
+}
+
+export interface SwapOptions {
+  plan: MealPlan
+  isDone: PlanItemDone
+  foodsById: Map<string, Food>
+  /** Alérgenos ya introducidos con pruebas reales. */
+  allergenIntro: Map<AllergenId, string>
+  birthDate: string | null
+  /** Elemento del plan que se quiere cambiar. */
+  itemId: string
+}
+
+/**
+ * Alimentos del plan por los que se puede cambiar `itemId` intercambiando sus días.
+ * Solo se ofrecen los cambios que mantienen las reglas del plan:
+ *  - cada alimento queda en un día en el que el bebé ya tiene la edad mínima,
+ *  - un alérgeno nuevo sigue yendo solo ese día,
+ *  - y a al menos 3 días de otro alérgeno nuevo.
+ */
+export function swapOptions(opts: SwapOptions): { options: SwapOption[]; blocked: number } {
+  const source = opts.plan.items.find((i) => i.id === opts.itemId)
+  if (!source || opts.isDone(source)) return { options: [], blocked: 0 }
+  const options: SwapOption[] = []
+  let blocked = 0
+
+  for (const target of opts.plan.items) {
+    if (target.id === source.id || target.date === source.date || opts.isDone(target)) continue
+    const targetFood = opts.foodsById.get(target.foodId)
+    if (!targetFood) continue
+    const swapped = opts.plan.items.map((i) =>
+      i.id === source.id ? { ...i, date: target.date } : i.id === target.id ? { ...i, date: source.date } : i,
+    )
+    const { intro, introItem } = plannedIntroductions(swapped, opts.isDone, opts.foodsById, opts.allergenIntro)
+    const ok = [
+      { item: source, date: target.date },
+      { item: target, date: source.date },
+    ].every(({ item, date }) => {
+      const food = opts.foodsById.get(item.foodId)
+      if (!food) return false
+      // Edad mínima ese día
+      if (opts.birthDate) {
+        const months = getAge(opts.birthDate, date)?.months ?? -1
+        if (months < 6 || food.minAge > months) return false
+      }
+      // Un alérgeno nuevo va solo ese día
+      const sameDay = swapped.filter((i) => i.date === date && !opts.isDone(i))
+      if (sameDay.length > 1 && sameDay.some((i) => introItem.has(i.id))) return false
+      // Separación de 3 días con otros alérgenos nuevos
+      const own = introItem.get(item.id)
+      if (own) {
+        for (const [a, d] of intro) {
+          if (!own.includes(a) && Math.abs(daysBetween(d, date)) < ALLERGEN_WAIT_DAYS) return false
+        }
+      }
+      return true
+    })
+    if (ok) options.push({ item: target, food: targetFood })
+    else blocked++
+  }
+
+  options.sort((a, b) => (a.item.date < b.item.date ? -1 : a.item.date > b.item.date ? 1 : 0))
+  return { options, blocked }
+}

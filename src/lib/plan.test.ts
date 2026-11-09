@@ -13,6 +13,7 @@ import {
   retryPlanChange,
   retrySlot,
   sixMonthsDate,
+  swapOptions,
 } from './plan'
 
 let n = 0
@@ -229,5 +230,54 @@ describe('volver a probar en el plan', () => {
     const isDone = planItemDoneChecker([trial('t1', 'kiwi', '2026-11-07', true)])
     expect(isDone(base.items[0])).toBe(true)
     expect(isDone(base.items[2])).toBe(false)
+  })
+})
+
+describe('cambiar un alimento del plan por otro', () => {
+  const plan: MealPlan = {
+    perDay: 2,
+    items: [
+      { id: 'a', foodId: 'mango', date: '2026-11-09' },
+      { id: 'b', foodId: 'kiwi', date: '2026-11-09' },
+      { id: 'c', foodId: 'pera', date: '2026-11-10' },
+      { id: 'd', foodId: 'huevo', date: '2026-11-11' }, // alérgeno nuevo, solo
+      { id: 'e', foodId: 'melon', date: '2026-11-12' },
+      { id: 'f', foodId: 'calabaza', date: '2026-11-12' },
+      { id: 'g', foodId: 'merluza', date: '2026-11-14' }, // alérgeno nuevo, solo
+      { id: 'h', foodId: 'uvas', date: '2026-12-20' }, // 9+ meses (los cumple el 1-ene)
+      { id: 'i', foodId: 'platano', date: '2026-11-08' }, // ya probado
+    ],
+  }
+  const isDone = (item: PlanItem) => item.foodId === 'platano'
+  const run = (itemId: string, birthDate: string | null = '2026-04-01') =>
+    swapOptions({ plan, isDone, foodsById: FOOD_BY_ID, allergenIntro: new Map(), birthDate, itemId })
+
+  it('ofrece los alimentos pendientes de otros días, ordenados por fecha', () => {
+    const ids = run('a').options.map((o) => o.item.id)
+    expect(ids).toEqual(['c', 'e', 'f']) // no 'b' (mismo día), ni 'i' (hecho)
+  })
+
+  it('un alérgeno nuevo no puede ir a un día con otro alimento', () => {
+    // huevo (d) a hoy, junto al kiwi: no. Merluza tampoco.
+    expect(run('a').options.some((o) => o.item.id === 'd' || o.item.id === 'g')).toBe(false)
+    // pero huevo sí puede cambiarse con la pera (día de un solo alimento)
+    expect(run('d').options.map((o) => o.item.id)).toContain('c')
+  })
+
+  it('respeta los 3 días entre alérgenos nuevos', () => {
+    // huevo (11) ↔ melón (12): el huevo quedaría a 2 días de la merluza (14)
+    expect(run('d').options.map((o) => o.item.id)).not.toContain('e')
+  })
+
+  it('respeta la edad mínima', () => {
+    // uvas (9+ m) no pueden adelantarse a noviembre con 7 meses
+    expect(run('h').options).toEqual([])
+    expect(run('h').blocked).toBeGreaterThan(0)
+    // sin fecha de nacimiento no se comprueba la edad
+    expect(run('h', null).options.length).toBeGreaterThan(0)
+  })
+
+  it('un alimento ya hecho no se puede cambiar', () => {
+    expect(run('i').options).toEqual([])
   })
 })

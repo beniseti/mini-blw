@@ -86,6 +86,8 @@ interface AppStore {
   /** Pasa a hoy los días atrasados (desplaza todo lo pendiente). */
   catchUpPlan: () => number
   removePlanItem: (id: string) => void
+  /** Intercambia los días de dos alimentos del plan. */
+  swapPlanItems: (aId: string, bId: string) => void
   clearPlan: () => void
 }
 
@@ -303,6 +305,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return movePlan(catchUpMoves(d.plan, planItemDoneChecker(d.trials), toISODate()))
   }, [movePlan])
   const removePlanItem = useCallback((id: string) => local({ opId: newId(), type: 'deletePlanItem', id }), [local])
+  const swapPlanItems = useCallback(
+    (aId: string, bId: string) => {
+      const items = stateRef.current.data.plan.items
+      const a = items.find((i) => i.id === aId)
+      const b = items.find((i) => i.id === bId)
+      if (a && b)
+        movePlan([
+          { id: a.id, date: b.date },
+          { id: b.id, date: a.date },
+        ])
+    },
+    [movePlan],
+  )
   const clearPlan = useCallback(
     () => local({ opId: newId(), type: 'replacePlan', plan: { perDay: stateRef.current.data.plan.perDay, items: [] } }),
     [local],
@@ -342,6 +357,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       postponePlanDay,
       catchUpPlan,
       removePlanItem,
+      swapPlanItems,
       clearPlan,
     }),
     [
@@ -363,6 +379,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       postponePlanDay,
       catchUpPlan,
       removePlanItem,
+      swapPlanItems,
       clearPlan,
     ],
   )

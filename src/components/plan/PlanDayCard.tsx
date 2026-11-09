@@ -13,7 +13,8 @@ interface Props {
   onRegister: (foodId: string) => void
   onOpenFood: (foodId: string) => void
   onPostpone?: (date: string) => void
-  onRemove?: (itemId: string) => void
+  /** Abre las opciones del alimento (cambiar por otro o quitar). */
+  onOptions?: (itemId: string) => void
   highlight?: boolean
 }
 
@@ -23,7 +24,7 @@ function dayTitle(date: string, today: string): string {
   return formatDayLabel(date, today)
 }
 
-export function PlanDayCard({ day, today, trials, onRegister, onOpenFood, onPostpone, onRemove, highlight }: Props) {
+export function PlanDayCard({ day, today, trials, onRegister, onOpenFood, onPostpone, onOptions, highlight }: Props) {
   const overdue = day.date < today && !day.done
   const pending = day.items.some((i) => !i.done)
   const isToday = day.date === today
@@ -102,14 +103,15 @@ export function PlanDayCard({ day, today, trials, onRegister, onOpenFood, onPost
                   >
                     Registrar
                   </button>
-                  {onRemove && (
+                  {onOptions && (
                     <button
                       type="button"
-                      onClick={() => onRemove(item.id)}
-                      className="flex h-11 w-9 items-center justify-center rounded-xl text-lg text-ink-soft"
-                      aria-label={`Quitar ${food.name} del plan`}
+                      onClick={() => onOptions(item.id)}
+                      className="flex h-11 w-10 items-center justify-center rounded-xl text-xl text-ink-soft"
+                      aria-label={`Cambiar ${food.name} por otro alimento o quitarlo del plan`}
+                      title="Cambiar o quitar"
                     >
-                      ✕
+                      🔄
                     </button>
                   )}
                 </div>

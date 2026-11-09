@@ -9,6 +9,7 @@ import { FoodDetailSheet } from './pages/FoodDetailSheet'
 import { FoodsPage } from './pages/FoodsPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { HomePage } from './pages/HomePage'
+import { PlanItemSheet } from './pages/PlanItemSheet'
 import { PlanPage } from './pages/PlanPage'
 import { ProfilePage } from './pages/ProfilePage'
 import type { CategoryId } from './types'
@@ -22,6 +23,7 @@ export default function App() {
   const foodId = route.params.get('alimento')
   const editId = route.params.get('editar')
   const startNew = route.params.get('nueva') === '1'
+  const planItemId = route.params.get('cambiar')
 
   const openFood = useCallback(
     (id: string, trialId?: string) => openOverlay(path, { alimento: id, editar: trialId }),
@@ -33,6 +35,8 @@ export default function App() {
     [openOverlay, path],
   )
   const closeFood = useCallback(() => closeOverlay(path), [closeOverlay, path])
+  /** Opciones de un alimento del plan: cambiarlo por otro o quitarlo. */
+  const openPlanItem = useCallback((id: string) => openOverlay(path, { cambiar: id }), [openOverlay, path])
   const showRetry = useCallback(() => {
     setFilters({ ...DEFAULT_FILTERS, status: 'retry' })
     goTab('/alimentos')
@@ -54,11 +58,14 @@ export default function App() {
             onOpenFood={openFood}
             onRegister={registerFood}
             onShowRetry={showRetry}
+            onPlanOptions={openPlanItem}
             onOpenCategory={openCategory}
             onGoTab={goTab}
           />
         )}
-        {path === '/plan' && <PlanPage onOpenFood={openFood} onRegister={registerFood} onGoTab={goTab} />}
+        {path === '/plan' && (
+          <PlanPage onOpenFood={openFood} onRegister={registerFood} onGoTab={goTab} onOptions={openPlanItem} />
+        )}
         {path === '/alimentos' && <FoodsPage filters={filters} onFiltersChange={setFilters} onOpenFood={openFood} />}
         {path === '/historial' && <HistoryPage onOpenTrial={openFood} onGoTab={goTab} />}
         {path === '/evitar' && <AvoidPage />}
@@ -66,6 +73,7 @@ export default function App() {
       </main>
       <BottomNav current={path} onNavigate={goTab} />
       <FoodDetailSheet foodId={foodId} editTrialId={editId} startNew={startNew} onClose={closeFood} />
+      <PlanItemSheet itemId={planItemId} onClose={closeFood} />
     </div>
   )
 }

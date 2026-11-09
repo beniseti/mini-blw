@@ -12,10 +12,11 @@ interface Props {
   onRegister: (foodId: string) => void
   onOpenFood: (foodId: string) => void
   onGoTab: (path: string) => void
+  onOptions: (itemId: string) => void
 }
 
 /** Resumen del plan de comidas para la pantalla de inicio: lo que toca hoy. */
-export function TodayPlanCard({ onRegister, onOpenFood, onGoTab }: Props) {
+export function TodayPlanCard({ onRegister, onOpenFood, onGoTab, onOptions }: Props) {
   const { data, today, postponePlanDay, catchUpPlan } = useStore()
   const toast = useToast()
   const isDone = useMemo(() => planItemDoneChecker(data.trials), [data.trials])
@@ -83,6 +84,7 @@ export function TodayPlanCard({ onRegister, onOpenFood, onGoTab }: Props) {
             highlight
             onRegister={onRegister}
             onOpenFood={onOpenFood}
+            onOptions={onOptions}
             onPostpone={(date) => {
               if (postponePlanDay(date) > 0) toast.show('⏭️ Aplazado a mañana (y el resto del plan, un día)')
             }}
